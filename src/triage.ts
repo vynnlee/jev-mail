@@ -1,6 +1,17 @@
 import { CONFIG } from './config.js';
 import type { EmailItem, TriageResult } from './types.js';
 
+function buildCriteriaMap() {
+  const criteria: Record<string, { what: string; examples: string[] }> = {};
+  for (const cat of CONFIG.categories) {
+    criteria[cat.key] = {
+      what: cat.description,
+      examples: cat.examples,
+    };
+  }
+  return criteria;
+}
+
 export function buildJevPayload(email: EmailItem) {
   return {
     model: CONFIG.typesafe.model,
@@ -27,37 +38,7 @@ export function buildJevPayload(email: EmailItem) {
         type: 'choice',
         instructions:
           'If this email does not require direct action, which category does it primarily belong to?',
-        criteria: {
-          pending: {
-            what: "Awaiting another person's reply, package delivery tracking, support ticket response, or ongoing workflow resolution",
-            examples: [
-              "We received your inquiry and will respond soon",
-              "Your order has shipped and is on the way",
-            ],
-          },
-          receipts: {
-            what: "Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings",
-            examples: [
-              "Your receipt from Acme Inc",
-              "Payment confirmation for subscription",
-            ],
-          },
-          newsletter: {
-            what: "Editorial content, digests, blogs, product release updates, marketing promotions, Substack",
-            examples: [
-              "This week in Tech Digest",
-              "Introducing our new feature v2.0",
-            ],
-          },
-          notifications: {
-            what: "Automated service notices, one-time verification codes, OTPs, password resets, GitHub/Jira mentions, security alerts",
-            examples: [
-              "Your verification code is 582914",
-              "Security alert: New login detected",
-              "[GitHub] Pull request #123 merged",
-            ],
-          },
-        },
+        criteria: buildCriteriaMap(),
       },
     },
   };
@@ -76,12 +57,12 @@ export function evaluateTriageDecision(
   const bucketChoice = answers.bucket.choice;
   const bucketConfidence = answers.bucket.confidence ?? 1.0;
 
-  // 1. Follow Up: retain in Inbox, star if important
+  // 1. Action item: retain in Inbox, star if important
   if (reqActionNoul >= CONFIG.thresholds.requiresAction) {
     const isImportant = isImportantNoul >= CONFIG.thresholds.isImportant;
     return {
       emailId: email.id,
-      targetLabel: CONFIG.labels.followUp,
+      targetLabel: CONFIG.actionLabel,
       shouldStar: isImportant,
       shouldArchive: false,
       actionType: isImportant ? 'KEEP_INBOX_STAR' : 'KEEP_INBOX',
@@ -99,7 +80,7 @@ export function evaluateTriageDecision(
   if (bucketConfidence < CONFIG.thresholds.minConfidence) {
     return {
       emailId: email.id,
-      targetLabel: CONFIG.labels.review,
+      targetLabel: CONFIG.reviewLabel,
       shouldStar: false,
       shouldArchive: false,
       actionType: 'REVIEW_FALLBACK',
@@ -107,39 +88,26 @@ export function evaluateTriageDecision(
       isImportantScore: isImportantNoul,
       chosenBucket: bucketChoice,
       confidence: bucketConfidence,
-      reasoning: `Low category confidence (${(bucketConfidence * 100).toFixed(0)}%): routed to Review`,
+      reasoning: `Low category confidence (${(bucketConfidence * 100).toFixed(0)}%): routed to ${CONFIG.reviewLabel}`,
     };
   }
 
-  // 3. Non-action: assign category label and archive immediately
-  let targetLabel: string;
-  switch (bucketChoice) {
-    case 'pending':
-      targetLabel = CONFIG.labels.pending;
-      break;
-    case 'receipts':
-      targetLabel = CONFIG.labels.receipts;
-      break;
-    case 'newsletter':
-      targetLabel = CONFIG.labels.newsletter;
-      break;
-    case 'notifications':
-    default:
-      targetLabel = CONFIG.labels.notifications;
-      break;
-  }
+  // 3. Non-action: assign category label and apply archive policy
+  const categoryDef = CONFIG.categories.find((c) => c.key === bucketChoice);
+  const targetLabel = categoryDef ? categoryDef.label : CONFIG.categories[CONFIG.categories.length - 1].label;
+  const shouldArchive = categoryDef ? categoryDef.archive : true;
 
   return {
     emailId: email.id,
     targetLabel,
     shouldStar: false,
-    shouldArchive: true,
-    actionType: 'ARCHIVE_LABEL',
+    shouldArchive,
+    actionType: shouldArchive ? 'ARCHIVE_LABEL' : 'KEEP_INBOX',
     requiresActionScore: reqActionNoul,
     isImportantScore: isImportantNoul,
     chosenBucket: bucketChoice,
     confidence: bucketConfidence,
-    reasoning: `Archived into ${targetLabel}`,
+    reasoning: `${shouldArchive ? 'Archived into' : 'Retained in'} ${targetLabel}`,
   };
 }
 
@@ -159,37 +127,7 @@ export function buildHistoricalJevPayload(email: EmailItem) {
         type: 'choice',
         instructions:
           'Which category does this historical email primarily belong to?',
-        criteria: {
-          pending: {
-            what: "Awaiting another person's reply, package delivery tracking, support ticket response, or ongoing workflow resolution",
-            examples: [
-              "We received your inquiry and will respond soon",
-              "Your order has shipped and is on the way",
-            ],
-          },
-          receipts: {
-            what: "Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings",
-            examples: [
-              "Your receipt from Acme Inc",
-              "Payment confirmation for subscription",
-            ],
-          },
-          newsletter: {
-            what: "Editorial content, digests, blogs, product release updates, marketing promotions, Substack",
-            examples: [
-              "This week in Tech Digest",
-              "Introducing our new feature v2.0",
-            ],
-          },
-          notifications: {
-            what: "Automated service notices, one-time verification codes, OTPs, password resets, GitHub/Jira mentions, security alerts",
-            examples: [
-              "Your verification code is 582914",
-              "Security alert: New login detected",
-              "[GitHub] Pull request #123 merged",
-            ],
-          },
-        },
+        criteria: buildCriteriaMap(),
       },
     },
   };
@@ -207,7 +145,7 @@ export function evaluateHistoricalTriageDecision(
   if (bucketConfidence < CONFIG.thresholds.minConfidence) {
     return {
       emailId: email.id,
-      targetLabel: CONFIG.labels.review,
+      targetLabel: CONFIG.reviewLabel,
       shouldStar: false,
       shouldArchive: true,
       actionType: 'ARCHIVE_LABEL',
@@ -215,26 +153,12 @@ export function evaluateHistoricalTriageDecision(
       isImportantScore: 0,
       chosenBucket: bucketChoice,
       confidence: bucketConfidence,
-      reasoning: 'Low confidence historical email: labeled Review and archived',
+      reasoning: `Low confidence historical email: labeled ${CONFIG.reviewLabel} and archived`,
     };
   }
 
-  let targetLabel: string;
-  switch (bucketChoice) {
-    case 'pending':
-      targetLabel = CONFIG.labels.pending;
-      break;
-    case 'receipts':
-      targetLabel = CONFIG.labels.receipts;
-      break;
-    case 'newsletter':
-      targetLabel = CONFIG.labels.newsletter;
-      break;
-    case 'notifications':
-    default:
-      targetLabel = CONFIG.labels.notifications;
-      break;
-  }
+  const categoryDef = CONFIG.categories.find((c) => c.key === bucketChoice);
+  const targetLabel = categoryDef ? categoryDef.label : CONFIG.categories[CONFIG.categories.length - 1].label;
 
   return {
     emailId: email.id,

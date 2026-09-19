@@ -16,42 +16,74 @@ Instead of slow, generative LLM text prompts or brittle regex filters, Jev-Mail 
 
 ---
 
+## Architecture Overview
+
+```mermaid
+flowchart LR
+    Trigger["Cloud Time Trigger\n(Every 5 Minutes)"] --> Worker["Google Apps Script\n(Serverless Engine)"]
+    Gmail["Gmail Inbox"] <-->|"Poll Unprocessed Threads"| Worker
+    Worker <-->|"Parallel Evaluation (<250ms)"| Jev["TypeSafe Jev API\n(System One)"]
+    Worker --> Actions["Automated Actions:\nApply Label, Star, Archive"]
+```
+
+---
+
+## Operating Modes
+
+Jev-Mail supports two deployment modes:
+
+```mermaid
+flowchart TD
+    Choice{"Select Workflow Mode"}
+    Choice -->|"Mode 1"| DefaultMode["Default Template Mode\n(Zero-Config)"]
+    Choice -->|"Mode 2"| CustomMode["Custom Taxonomy Mode\n(User-Defined)"]
+
+    DefaultMode --> DeployDefault["Use Pre-built gas/Code.gs\nDeploy Directly to Apps Script"]
+
+    CustomMode --> Config["Edit taxonomy.config.json\nDefine Categories and Rules"]
+    Config --> Generate["Run: npm run generate\nCompiles Custom GAS Script"]
+    Generate --> Simulate["Run: npm run simulate\nValidate against Test Cases"]
+    Simulate --> DeployCustom["Deploy Generated Code.gs to GAS"]
+
+    DeployDefault --> Execution["24/7 Cloud Execution\n(Autonomous Zero-Inbox)"]
+    DeployCustom --> Execution
+```
+
+1. **Mode 1: Default Template Mode (Zero-Config)**
+   - Ships with a battle-tested, MECE Zero-Inbox taxonomy (`Follow Up`, `Pending`, `Receipts`, `Newsletter`, `Notifications`, `Review`).
+   - Ready-to-deploy pre-compiled script in [gas/Code.gs](gas/Code.gs).
+   - Zero local build tools or dependencies required.
+
+2. **Mode 2: Custom Taxonomy Mode (User-Defined)**
+   - Allows full customization of email categories, criteria, labels, examples, and archive rules in `taxonomy.config.json`.
+   - Compiles custom Google Apps Script code and TypeScript definitions via `npm run generate`.
+   - Enables pre-deployment verification using local mock email simulation (`npm run simulate`).
+
+---
+
 ## Decision Pipeline
 
 Jev-Mail evaluates incoming emails across two orthogonal axes: Lifecycle (System Mailboxes) and Content (Custom Labels).
 
-```
-                  Incoming Email
-                        │
-                        ▼
-             TypeSafe Jev Inference
-            (Parallel Speculative Fan-out)
-                        │
-        ┌───────────────┴───────────────┐
-        ▼                               ▼
-requires_action >= 0.55        requires_action < 0.55
-(Direct Action Required)       (Information / Non-Action)
-        │                               │
-        ▼                               ▼
-  Label: Follow Up             Confidence >= 0.60?
-  Retain in INBOX                      │
-        │                       ┌──────┴──────┐
-        ▼                       ▼             ▼
-is_important >= 0.70?          YES            NO
-  YES: Star ON                  │             │
-  NO:  Star OFF                 ▼             ▼
-                        Choice Routing   Label: Review
-                        - Receipts       Retain in INBOX
-                        - Newsletter
-                        - Notifications
-                        - Pending
-                                │
-                                ▼
-                         Archive Immediately
-                         (Zero-Inbox)
+```mermaid
+flowchart TD
+    Start["Incoming Email in INBOX"] --> Inference["TypeSafe Jev Inference\n(Parallel Speculative Fan-out)"]
+
+    Inference --> CheckAction{"requires_action >= 0.55?"}
+
+    CheckAction -- "Yes (Action Required)" --> ActionPath["Assign Label: Follow Up\nRetain in INBOX"]
+    ActionPath --> CheckUrgent{"is_important >= 0.70?"}
+    CheckUrgent -- "Yes" --> StarOn["Set Star: ON\n(Priority Focus Queue)"]
+    CheckUrgent -- "No" --> StarOff["Set Star: OFF"]
+
+    CheckAction -- "No (Informational)" --> CheckConfidence{"Category Confidence >= 0.60?"}
+
+    CheckConfidence -- "No (Uncertain)" --> ReviewPath["Assign Label: Review\nRetain in INBOX for Inspection"]
+    CheckConfidence -- "Yes" --> RouteCategory["Assign Category Label\n(Receipts, Newsletter, Notifications, Pending)"]
+    RouteCategory --> ArchiveAction["Archive Thread\n(Zero-Inbox Achieved)"]
 ```
 
-### Taxonomy Matrix
+### Default Taxonomy Matrix
 
 | Label | Description | Criteria | Star Policy | Inbox Lifecycle |
 | :--- | :--- | :--- | :---: | :---: |
@@ -70,17 +102,19 @@ If you use an AI coding agent (Claude Code, Antigravity, Cursor, Codex, Gemini C
 
 ```markdown
 Read AGENTS.md in https://github.com/vynnlee/jev-mail and set up Jev-Mail on my Gmail account.
-My TypeSafe API Key is: <YOUR_TYPESAFE_API_KEY>
 
-Follow the deployment steps in AGENTS.md:
-1. Verify the local build and run `npm run simulate`.
-2. Push the Google Apps Script code to my account.
-3. Set TYPESAFE_API_KEY in Script Properties.
-4. Run installTrigger to start 24/7 cloud execution.
-5. Guide me through Gmail settings for Zero-Inbox.
+Security Requirement:
+Do not ask me to enter or expose my TypeSafe API key in this chat prompt.
+Instead, prompt me to enter it interactively via terminal or secure input, or guide me to paste it directly into Google Apps Script Project Settings.
+
+Choose deployment mode:
+- Mode 1 (Default): Deploy standard Zero-Inbox taxonomy (Follow Up, Pending, Receipts, Newsletter, Notifications, Review).
+- Mode 2 (Custom): Ask me for my desired email categories and compile a custom taxonomy.config.json before deployment.
+
+Follow the instructions in AGENTS.md step by step.
 ```
 
-The agent will parse [AGENTS.md](AGENTS.md) and handle setup automatically.
+The agent will parse [AGENTS.md](AGENTS.md) and handle setup securely without leaking your API key.
 
 ---
 
@@ -116,7 +150,54 @@ Sign up at [TypeSafe AI](https://typesafe.ai) and generate an API key.
 To categorize and clear existing emails currently sitting in your `INBOX`:
 1. Select `triageHistoricalInbox` from the function dropdown.
 2. Click **Run**.
-3. All existing inbox emails are categorized into `Receipts`, `Newsletter`, `Notifications`, or `Pending` and archived immediately. Star and Follow Up labels are never applied to historical emails.
+3. All existing inbox emails are categorized into category labels and archived immediately. Star and Follow Up labels are never applied to historical emails.
+
+---
+
+## Customizing Taxonomy (Mode 2)
+
+To define your own custom email categories and routing rules:
+
+1. Edit `taxonomy.config.json`:
+   ```json
+   {
+     "action_label": "Follow Up",
+     "review_label": "Review",
+     "thresholds": {
+       "requires_action": 0.55,
+       "is_important": 0.70,
+       "min_confidence": 0.60
+     },
+     "categories": [
+       {
+         "key": "finance",
+         "label": "Finance",
+         "archive": true,
+         "description": "Invoices, payment receipts, banking alerts, tax documents",
+         "examples": ["Invoice #4021 attached", "Payment confirmed"]
+       },
+       {
+         "key": "updates",
+         "label": "Updates",
+         "archive": true,
+         "description": "Team notifications, Jira tickets, system alerts",
+         "examples": ["[Jira] Issue assigned", "Deployment succeeded"]
+       }
+     ]
+   }
+   ```
+
+2. Compile your custom Google Apps Script and TypeScript config:
+   ```bash
+   npm run generate
+   ```
+
+3. Validate with local simulation:
+   ```bash
+   TYPESAFE_API_KEY="your-api-key" npm run simulate
+   ```
+
+4. Deploy the generated [gas/Code.gs](gas/Code.gs) to your Google Apps Script project.
 
 ---
 
@@ -135,7 +216,7 @@ Jev-Mail uses the Starred mailbox exclusively for emails where `is_important >= 
 
 ## Local Verification
 
-You can simulate decisions locally against mock email scenarios before deploying:
+You can simulate decisions locally against mock email scenarios:
 
 ```bash
 git clone https://github.com/vynnlee/jev-mail.git
@@ -158,13 +239,13 @@ Evaluating with Jev (jev-latest)...
 ┌─────────┬───────────┬───────────────────────────────────────┬─────────────────┬───────┬─────────┬─────────┬────────┐
 │ (index) │ id        │ subject                               │ label           │ star  │ archive │ latency │ status │
 ├─────────┼───────────┼───────────────────────────────────────┼─────────────────┼───────┼─────────┼─────────┼────────┤
-│ 0       │ 'mock_01' │ '[Urgent] Q3 Roadmap approval nee...' │ 'Follow Up'     │ 'YES' │ 'NO'    │ '554ms' │ 'PASS' │
-│ 1       │ 'mock_02' │ 'Question regarding webhook integ...' │ 'Follow Up'     │ 'NO'  │ 'NO'    │ '612ms' │ 'PASS' │
-│ 2       │ 'mock_03' │ 'Your package #KR-98214 has shipp...' │ 'Pending'       │ 'NO'  │ 'YES'   │ '208ms' │ 'PASS' │
-│ 3       │ 'mock_04' │ 'Your receipt for Cloud Invoice #...' │ 'Receipts'      │ 'NO'  │ 'YES'   │ '270ms' │ 'PASS' │
+│ 0       │ 'mock_01' │ '[Urgent] Q3 Roadmap approval nee...' │ 'Follow Up'     │ 'YES' │ 'NO'    │ '772ms' │ 'PASS' │
+│ 1       │ 'mock_02' │ 'Question regarding webhook integ...' │ 'Follow Up'     │ 'NO'  │ 'NO'    │ '786ms' │ 'PASS' │
+│ 2       │ 'mock_03' │ 'Your package #KR-98214 has shipp...' │ 'Pending'       │ 'NO'  │ 'YES'   │ '273ms' │ 'PASS' │
+│ 3       │ 'mock_04' │ 'Your receipt for Cloud Invoice #...' │ 'Receipts'      │ 'NO'  │ 'YES'   │ '290ms' │ 'PASS' │
 │ 4       │ 'mock_05' │ 'Issue #142: How System One model...' │ 'Newsletter'    │ 'NO'  │ 'YES'   │ '249ms' │ 'PASS' │
-│ 5       │ 'mock_06' │ '[GitHub] Pull request #84 merged...' │ 'Notifications' │ 'NO'  │ 'YES'   │ '220ms' │ 'PASS' │
-│ 6       │ 'mock_07' │ 'Your security verification code:...' │ 'Notifications' │ 'NO'  │ 'YES'   │ '208ms' │ 'PASS' │
+│ 5       │ 'mock_06' │ '[GitHub] Pull request #84 merged...' │ 'Notifications' │ 'NO'  │ 'YES'   │ '309ms' │ 'PASS' │
+│ 6       │ 'mock_07' │ 'Your security verification code:...' │ 'Notifications' │ 'NO'  │ 'YES'   │ '486ms' │ 'PASS' │
 └─────────┴───────────┴───────────────────────────────────────┴─────────────────┴───────┴─────────┴─────────┴────────┘
 
 Simulation complete. All decisions verified against taxonomy.
@@ -183,6 +264,10 @@ jev-mail/
 ├── LICENSE                 # MIT License
 ├── package.json            # Scripts and configuration
 ├── tsconfig.json           # TypeScript configuration
+├── taxonomy.config.json    # Active taxonomy configuration
+├── taxonomy.default.json   # Default taxonomy backup reference
+├── scripts/
+│   └── generate.js         # Generator for GAS code and TS configs
 ├── gas/
 │   ├── Code.gs             # Google Apps Script production code
 │   └── appsscript.json     # Apps Script manifest and scopes
@@ -191,7 +276,7 @@ jev-mail/
 │   └── Code-korean.gs      # Standalone Korean template
 ├── src/
 │   ├── types.ts            # TypeScript interfaces
-│   ├── config.ts           # Taxonomy and threshold constants
+│   ├── config.ts           # Auto-generated config constants
 │   ├── triage.ts           # Jev payload builder and decision logic
 │   └── cli.ts              # Local simulation harness
 └── examples/
@@ -204,7 +289,7 @@ jev-mail/
 
 - Zero persistent email storage: No emails or metadata are stored in external databases.
 - Execution occurs strictly inside your private Google Apps Script container.
-- API keys are stored in encrypted Google Script Properties.
+- API keys are stored in encrypted Google Script Properties. Never expose API keys in chat prompts.
 - Inference payload transmits only sender, subject, and a truncated snippet (up to 1,000 characters) over TLS directly to TypeSafe AI.
 
 ---

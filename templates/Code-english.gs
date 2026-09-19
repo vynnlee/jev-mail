@@ -1,5 +1,5 @@
 /**
- * Jev-Mail: Google Apps Script 24/7 Cloud Automation (English Template)
+ * Jev-Mail: Google Apps Script 24/7 Cloud Automation
  *
  * Runs automatically on Google Cloud infrastructure via time-driven triggers.
  * Triages, labels, prioritizes, and archives incoming emails using TypeSafe Jev.
@@ -12,24 +12,33 @@
  */
 
 var CONFIG = {
+  actionLabel: 'Follow Up',
+  reviewLabel: 'Review',
   labels: {
-    followUp: 'Follow Up',
     pending: 'Pending',
     receipts: 'Receipts',
     newsletter: 'Newsletter',
     notifications: 'Notifications',
-    review: 'Review',
+  },
+  archiveMap: {
+    pending: true,
+    receipts: true,
+    newsletter: true,
+    notifications: true,
   },
   thresholds: {
     requiresAction: 0.55,
-    isImportant: 0.70,
-    minConfidence: 0.60,
+    isImportant: 0.7,
+    minConfidence: 0.6,
   },
   typesafeEndpoint: 'https://api.typesafe.ai/v1/systemone',
   model: 'jev-latest',
   maxBatchSize: 10,
 };
 
+/**
+ * Installs a time-driven trigger running autoTriageInbox every 5 minutes.
+ */
 function installTrigger() {
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
@@ -44,6 +53,9 @@ function installTrigger() {
   Logger.log('[OK] 24/7 trigger installed successfully (interval: 5 minutes).');
 }
 
+/**
+ * Validates whether TYPESAFE_API_KEY is configured in Script Properties.
+ */
 function setApiKey() {
   var key = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
   if (!key) {
@@ -53,6 +65,9 @@ function setApiKey() {
   }
 }
 
+/**
+ * Main trigger function: triages unhandled emails in INBOX.
+ */
 function autoTriageInbox() {
   var apiKey = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
   if (!apiKey) {
@@ -94,6 +109,10 @@ function autoTriageInbox() {
   }
 }
 
+/**
+ * Historical Zero-Inbox Triage:
+ * Re-triages all existing inbox emails without adding Star or Follow Up labels.
+ */
 function triageHistoricalInbox(maxThreads) {
   maxThreads = maxThreads || 100;
   var apiKey = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
@@ -110,7 +129,7 @@ function triageHistoricalInbox(maxThreads) {
   }
 
   var labelObjects = getOrCreateLabels();
-  var followUpLabel = labelObjects[CONFIG.labels.followUp];
+  var actionLabelObj = labelObjects[CONFIG.actionLabel];
   var processed = 0;
 
   for (var i = 0; i < threads.length; i++) {
@@ -118,8 +137,8 @@ function triageHistoricalInbox(maxThreads) {
     var messages = thread.getMessages();
     var latestMessage = messages[messages.length - 1];
 
-    if (followUpLabel && threadHasLabel(thread, followUpLabel)) {
-      thread.removeLabel(followUpLabel);
+    if (actionLabelObj && threadHasLabel(thread, actionLabelObj)) {
+      thread.removeLabel(actionLabelObj);
     }
 
     var existingLabel = getExistingCategoryLabel(thread, labelObjects);
@@ -155,6 +174,9 @@ function triageHistoricalInbox(maxThreads) {
   Logger.log('[DONE] Historical triage completed: ' + processed + ' threads processed.');
 }
 
+/**
+ * Calls TypeSafe Jev System One model.
+ */
 function callJevTriage(emailData, apiKey) {
   var payload = {
     model: CONFIG.model,
@@ -177,10 +199,10 @@ function callJevTriage(emailData, apiKey) {
         instructions:
           'If this email does not require direct action, which category does it primarily belong to?',
         criteria: {
-          pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
-          receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
-          newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
-          notifications: 'Automated service notices, one-time verification codes, OTPs, password resets, GitHub/Jira mentions, security alerts',
+          pending: "Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution",
+          receipts: "Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings",
+          newsletter: "Editorial content, digests, blogs, product release updates, marketing promotions, Substack",
+          notifications: "Automated service notices, one-time verification codes, OTPs, password resets, GitHub/Jira mentions, security alerts",
         },
       },
     },
@@ -209,23 +231,27 @@ function callJevTriage(emailData, apiKey) {
   var bucket = answers.bucket.choice;
   var bucketConf = answers.bucket.confidence || 1.0;
 
+  // 1. Action required: retain in Inbox, star if important
   if (reqAction >= CONFIG.thresholds.requiresAction) {
     var important = isImportant >= CONFIG.thresholds.isImportant;
-    return { targetLabel: CONFIG.labels.followUp, shouldStar: important, shouldArchive: false };
+    return { targetLabel: CONFIG.actionLabel, shouldStar: important, shouldArchive: false };
   }
 
+  // 2. Non-action with low category confidence: fallback to Review
   if (bucketConf < CONFIG.thresholds.minConfidence) {
-    return { targetLabel: CONFIG.labels.review, shouldStar: false, shouldArchive: false };
+    return { targetLabel: CONFIG.reviewLabel, shouldStar: false, shouldArchive: false };
   }
 
-  var targetLabel = CONFIG.labels.notifications;
-  if (bucket === 'pending') targetLabel = CONFIG.labels.pending;
-  else if (bucket === 'receipts') targetLabel = CONFIG.labels.receipts;
-  else if (bucket === 'newsletter') targetLabel = CONFIG.labels.newsletter;
+  // 3. Non-action: assign category label and check archive policy
+  var targetLabel = CONFIG.labels[bucket] || CONFIG.labels['notifications'];
+  var shouldArchive = CONFIG.archiveMap[bucket] !== false;
 
-  return { targetLabel: targetLabel, shouldStar: false, shouldArchive: true };
+  return { targetLabel: targetLabel, shouldStar: false, shouldArchive: shouldArchive };
 }
 
+/**
+ * Historical Jev classification (no star, no follow-up).
+ */
 function callJevHistoricalTriage(emailData, apiKey) {
   var payload = {
     model: CONFIG.model,
@@ -238,10 +264,10 @@ function callJevHistoricalTriage(emailData, apiKey) {
         instructions:
           'Which category does this historical email belong to?',
         criteria: {
-          pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
-          receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
-          newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
-          notifications: 'Automated service notices, one-time verification codes, OTPs, password resets, GitHub/Jira mentions, security alerts',
+          pending: "Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution",
+          receipts: "Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings",
+          newsletter: "Editorial content, digests, blogs, product release updates, marketing promotions, Substack",
+          notifications: "Automated service notices, one-time verification codes, OTPs, password resets, GitHub/Jira mentions, security alerts",
         },
       },
     },
@@ -268,14 +294,10 @@ function callJevHistoricalTriage(emailData, apiKey) {
   var bucketConf = json.answers.bucket.confidence || 1.0;
 
   if (bucketConf < CONFIG.thresholds.minConfidence) {
-    return { targetLabel: CONFIG.labels.review };
+    return { targetLabel: CONFIG.reviewLabel };
   }
 
-  var targetLabel = CONFIG.labels.notifications;
-  if (bucket === 'pending') targetLabel = CONFIG.labels.pending;
-  else if (bucket === 'receipts') targetLabel = CONFIG.labels.receipts;
-  else if (bucket === 'newsletter') targetLabel = CONFIG.labels.newsletter;
-
+  var targetLabel = CONFIG.labels[bucket] || CONFIG.labels['notifications'];
   return { targetLabel: targetLabel };
 }
 
@@ -296,8 +318,12 @@ function applyDecision(thread, message, decision, labelObjects) {
 
 function getOrCreateLabels() {
   var labelMap = {};
+  var allLabels = [CONFIG.actionLabel, CONFIG.reviewLabel];
   for (var key in CONFIG.labels) {
-    var name = CONFIG.labels[key];
+    allLabels.push(CONFIG.labels[key]);
+  }
+  for (var i = 0; i < allLabels.length; i++) {
+    var name = allLabels[i];
     var label = GmailApp.getUserLabelByName(name);
     if (!label) {
       label = GmailApp.createLabel(name);
@@ -330,13 +356,7 @@ function getExistingCategoryLabel(thread, labelObjects) {
   var labels = thread.getLabels();
   for (var i = 0; i < labels.length; i++) {
     var name = labels[i].getName();
-    if (
-      name === CONFIG.labels.pending ||
-      name === CONFIG.labels.receipts ||
-      name === CONFIG.labels.newsletter ||
-      name === CONFIG.labels.notifications ||
-      name === CONFIG.labels.review
-    ) {
+    if (name !== CONFIG.actionLabel && labelObjects[name]) {
       return name;
     }
   }

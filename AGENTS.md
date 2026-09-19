@@ -1,6 +1,6 @@
 # AGENTS.md: Agent Operations and Deployment Manual for Jev-Mail
 
-This document provides explicit instructions for coding agents (Claude Code, Antigravity, Cursor, Codex, Gemini CLI) to inspect, test, and deploy Jev-Mail to a user's Google Apps Script (GAS) and Gmail environment in one shot.
+This document provides explicit instructions for coding agents (Claude Code, Antigravity, Cursor, Codex, Gemini CLI) to inspect, customize, test, and deploy Jev-Mail to a user's Google Apps Script (GAS) and Gmail environment in one shot.
 
 ---
 
@@ -8,6 +8,16 @@ This document provides explicit instructions for coding agents (Claude Code, Ant
 
 Jev-Mail is a 24/7 autonomous Zero-Inbox triage system for Gmail.
 It replaces keyword filters and generative LLM prompts with TypeSafe AI System One model (Jev).
+
+### Architecture Overview
+
+```mermaid
+flowchart LR
+    Trigger["Cloud Time Trigger\n(Every 5 Minutes)"] --> Worker["Google Apps Script\n(Serverless Engine)"]
+    Gmail["Gmail Inbox"] <-->|"Poll Unprocessed Threads"| Worker
+    Worker <-->|"Parallel Evaluation (<250ms)"| Jev["TypeSafe Jev API\n(System One)"]
+    Worker --> Actions["Automated Actions:\nApply Label, Star, Archive"]
+```
 
 ### System One (Jev) Primitives
 1. Calibrated Probabilities (Noul): Returns mathematical probability (0.0 to 1.0) rather than text, enabling threshold-based decisions.
@@ -21,132 +31,133 @@ It replaces keyword filters and generative LLM prompts with TypeSafe AI System O
 
 ---
 
-## 2. Taxonomy and Decision Engine
+## 2. Secure Credential Handling (Critical Protocol)
 
-Jev-Mail separates email processing into two orthogonal axes: Content (Custom Labels) and Lifecycle (System Mailboxes).
+Never instruct the user to type their secret API key directly into plain chat prompts or commit it into repository files.
 
-### Content Taxonomy (Mutually Exclusive, Collectively Exhaustive)
-No numeric prefixes, no emojis. Exactly 5 core categories and 1 safety fallback:
-
-| Label | Description | Criteria |
-| :--- | :--- | :--- |
-| `Follow Up` | Direct human action required | Reply, decision, sign-off, or manual task needed |
-| `Pending` | Waiting on external outcome | Waiting on response, package in transit, ticket update |
-| `Receipts` | Financial and legal notices | Invoices, Stripe/bank alerts, SaaS subscriptions |
-| `Newsletter` | Reading material | Technical digests, blogs, product updates, marketing |
-| `Notifications` | Machine and telemetry alerts | GitHub/Jira pings, CI/CD builds, verification codes, OTPs, password resets |
-| `Review` | Low-confidence safety boundary | Confidence score below 0.60, retained in Inbox |
-
-### Lifecycle Mailboxes
-
-| System Mailbox | Policy |
-| :--- | :--- |
-| Inbox (`INBOX`) | Active queue only. Only emails requiring action (`Follow Up`) or human inspection (`Review`) remain in the Inbox. |
-| Starred (`STARRED`) | Priority focus queue. Starred only when `is_important >= 0.70` (urgent within 24h). Replaces Google's heuristic Important marker. |
-| Archive (`ARCHIVED`) | Non-action emails (`Pending`, `Receipts`, `Newsletter`, `Notifications`) are archived immediately after labeling. |
+When handling credentials as an agent:
+1. Check if `TYPESAFE_API_KEY` is already present in the local shell environment or in a local `.env` file.
+2. If absent:
+   - Prompt the user to enter it interactively via a masked terminal prompt:
+     ```bash
+     read -s -p "Enter TypeSafe API Key: " key && export TYPESAFE_API_KEY="$key"
+     ```
+   - Alternatively, instruct the user to create a `.env` file (which is gitignored) containing `TYPESAFE_API_KEY=your-key`.
+3. For Google Apps Script deployment:
+   - Instruct the user to save the key directly into **Project Settings -> Script Properties** with property name `TYPESAFE_API_KEY`.
+   - Never print or log the key in stdout, test artifacts, or commit messages.
 
 ---
 
-## 3. Calibrated Thresholds and Logic
+## 3. Two Operating Modes
 
-Configured in `src/config.ts` and `gas/Code.gs`:
+```mermaid
+flowchart TD
+    Choice{"Select Agent Protocol"}
+    Choice -->|"Mode 1"| DefaultMode["Default Template Mode\n(Zero-Config)"]
+    Choice -->|"Mode 2"| CustomMode["Custom Taxonomy Mode\n(User-Defined)"]
 
-```typescript
-thresholds: {
-  requiresAction: 0.55,
-  isImportant: 0.70,
-  minConfidence: 0.60,
-}
+    DefaultMode --> DeployDefault["Deploy Pre-built gas/Code.gs\nZero Customization Needed"]
+
+    CustomMode --> Interview["Ask User for Custom Categories\nDefine Labels and Archive Rules"]
+    Interview --> UpdateJson["Write taxonomy.config.json"]
+    UpdateJson --> Compile["Run: npm run generate\nCompiles gas/Code.gs and src/config.ts"]
+    Compile --> Test["Run: npm run simulate\nValidate against Mock Scenarios"]
+    Test --> DeployCustom["Deploy Generated Code.gs to GAS"]
 ```
 
-### Decision Pipeline
+### Mode 1: Default Template Mode
+- Deploys the standard, battle-tested MECE Zero-Inbox taxonomy:
+  - `Follow Up` (actionable, retained in INBOX, starred if urgent)
+  - `Pending` (awaiting outcome, archived)
+  - `Receipts` (financial invoices, archived)
+  - `Newsletter` (reading content, archived)
+  - `Notifications` (system alerts and verification codes, archived)
+  - `Review` (low confidence fallback, retained in INBOX)
+- Uses pre-built [gas/Code.gs](gas/Code.gs) directly without requiring local compilation.
+
+### Mode 2: Custom Taxonomy Mode
+- Use this mode when the user wants custom email categories, custom label names, or specific language localization (e.g. Korean labels).
+- Protocol:
+  1. Ask the user for their desired categories, labels, and archive behaviors.
+  2. Update `taxonomy.config.json` with the user's category definitions.
+  3. Execute `npm run generate` to compile customized `gas/Code.gs` and `src/config.ts`.
+  4. Run `npm run simulate` to verify model responses against mock data.
+  5. Deploy the compiled [gas/Code.gs](gas/Code.gs) to Google Apps Script.
+
+---
+
+## 4. Decision Pipeline Logic
+
+```mermaid
+flowchart TD
+    Start["Incoming Email in INBOX"] --> Inference["TypeSafe Jev Inference\n(Parallel Speculative Fan-out)"]
+
+    Inference --> CheckAction{"requires_action >= 0.55?"}
+
+    CheckAction -- "Yes (Action Required)" --> ActionPath["Assign Label: Follow Up\nRetain in INBOX"]
+    ActionPath --> CheckUrgent{"is_important >= 0.70?"}
+    CheckUrgent -- "Yes" --> StarOn["Set Star: ON\n(Priority Focus Queue)"]
+    CheckUrgent -- "No" --> StarOff["Set Star: OFF"]
+
+    CheckAction -- "No (Informational)" --> CheckConfidence{"Category Confidence >= 0.60?"}
+
+    CheckConfidence -- "No (Uncertain)" --> ReviewPath["Assign Label: Review\nRetain in INBOX for Inspection"]
+    CheckConfidence -- "Yes" --> RouteCategory["Assign Category Label\n(Receipts, Newsletter, Notifications, Pending)"]
+    RouteCategory --> ArchiveAction["Archive Thread\n(Zero-Inbox Achieved)"]
+```
+
 1. If `requires_action >= 0.55`:
-   - Label: `Follow Up`
+   - Label: Action label (default: `Follow Up`)
    - Archive: `false` (retained in Inbox)
    - Star: `true` if `is_important >= 0.70`, otherwise `false`
 2. If `requires_action < 0.55`:
    - If `bucket.confidence < 0.60`:
-     - Label: `Review`
+     - Label: Review label (default: `Review`)
      - Archive: `false` (retained in Inbox for safety)
      - Star: `false`
    - Else:
-     - Label: `bucket.choice` (`Pending`, `Receipts`, `Newsletter`, `Notifications`)
-     - Archive: `true` (thread.moveToArchive())
+     - Label: Category label defined in taxonomy config
+     - Archive: Category archive policy (default: `true`)
      - Star: `false`
 
 ---
 
-## 4. Repository Structure and Commands
+## 5. One-Shot Agent Deployment Protocol
 
-```text
-jev-mail/
-├── README.md               # English user documentation
-├── README.ko.md            # Korean user documentation
-├── AGENTS.md               # Agent deployment manual
-├── CONTRIBUTING.md         # Contribution guidelines
-├── LICENSE                 # MIT License
-├── package.json            # Scripts and dependencies
-├── tsconfig.json           # TypeScript configuration
-├── gas/
-│   ├── Code.gs             # Production Google Apps Script
-│   └── appsscript.json     # GAS manifest and OAuth scopes
-├── templates/
-│   ├── Code-english.gs     # English GAS template
-│   └── Code-korean.gs      # Korean GAS template
-├── src/
-│   ├── types.ts            # TypeScript interfaces
-│   ├── config.ts           # Taxonomy and thresholds
-│   ├── triage.ts           # Jev payload builder and rules
-│   └── cli.ts              # Local CLI test harness
-└── examples/
-    └── mock-emails.json    # Test suite
-```
-
-### Commands
-```bash
-# Install dependencies
-npm install
-
-# Build TypeScript
-npm run build
-
-# Run simulation test against TypeSafe API
-TYPESAFE_API_KEY="your-api-key" npm run simulate
-```
-
----
-
-## 5. One-Shot Deployment Protocol for Agents
-
-When a user instructs you to set up Jev-Mail, follow these steps:
+When instructed to deploy Jev-Mail:
 
 ### Step 1: Pre-flight Verification
-1. Check for `TYPESAFE_API_KEY` in the environment (`process.env.TYPESAFE_API_KEY`). If absent, prompt the user for their key.
-2. Run the simulation test:
+1. Securely obtain `TYPESAFE_API_KEY` following Section 2.
+2. If Mode 2 is selected, update `taxonomy.config.json` and run:
    ```bash
-   TYPESAFE_API_KEY="<KEY>" npm run simulate
+   npm run generate
    ```
-   Confirm all 6 test scenarios pass.
+3. Run simulation verification:
+   ```bash
+   npm run simulate
+   ```
+   Confirm all scenarios pass with 100% success rate.
 
 ### Step 2: Google Apps Script Setup
 
-#### Option A: CLASP CLI
-1. Check if `@google/clasp` is available: `npx @google/clasp -v`
-2. Run login: `npx @google/clasp login`
-3. Create project: `npx @google/clasp create --title "Jev-Mail-Triage" --type standalone --rootDir ./gas`
-4. Push code: `npx @google/clasp push`
-5. Configure Script Property `TYPESAFE_API_KEY`.
+#### Option A: Browser / Direct Deployment (Recommended)
+1. Navigate the user to `https://script.google.com/home` and open or create project `Jev-Mail-Triage`.
+2. Paste the contents of `gas/Code.gs`.
+3. In **Project Settings -> Script Properties**, add `TYPESAFE_API_KEY`.
+4. Select `installTrigger` from the function dropdown and run it once to establish the 5-minute cloud schedule.
 
-#### Option B: Browser or Manual Guidance
-1. Direct user to `https://script.google.com/home` and create a project named `Jev-Mail-Triage`.
-2. Copy `gas/Code.gs` into the editor.
-3. In Project Settings, add Script Property `TYPESAFE_API_KEY`.
-4. Select `installTrigger` from the function dropdown and click Run to authorize and start the 5-minute trigger.
+#### Option B: CLASP CLI Deployment
+1. Check clasp availability: `npx @google/clasp -v`
+2. Authenticate: `npx @google/clasp login`
+3. Push project code: `npx @google/clasp push`
+4. Guide user to configure `TYPESAFE_API_KEY` in Script Properties.
 
 ### Step 3: Configure Gmail Settings
+Guide the user through Gmail settings:
 1. Open Gmail Settings -> **See all settings** -> **Inbox**.
 2. Under **Importance markers**, select **No markers**.
-3. Under **Don't use my past actions to predict importance**, check the box.
+3. Check **Don't use my past actions to predict importance**.
 4. Save changes.
 
 ### Step 4: Optional Backlog Clean-Up

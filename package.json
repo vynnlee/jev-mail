@@ -4,8 +4,9 @@
   "description": "TypeSafe AI Jev-powered Zero-Inbox email triage automation",
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "simulate": "tsc && node dist/cli.js",
+    "generate": "node scripts/generate.js",
+    "build": "node scripts/generate.js && tsc",
+    "simulate": "node scripts/generate.js && tsc && node dist/cli.js",
     "test": "npm run simulate"
   },
   "keywords": ["typesafe", "jev", "gmail", "inbox-zero", "system-one"],

@@ -1,0 +1,53 @@
+{
+  "version": "1.0.0",
+  "action_label": "Follow Up",
+  "review_label": "Review",
+  "thresholds": {
+    "requires_action": 0.55,
+    "is_important": 0.70,
+    "min_confidence": 0.60
+  },
+  "categories": [
+    {
+      "key": "pending",
+      "label": "Pending",
+      "archive": true,
+      "description": "Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution",
+      "examples": [
+        "We received your inquiry and will respond soon",
+        "Your order has shipped and is on the way"
+      ]
+    },
+    {
+      "key": "receipts",
+      "label": "Receipts",
+      "archive": true,
+      "description": "Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings",
+      "examples": [
+        "Your receipt from Acme Inc",
+        "Payment confirmation for subscription"
+      ]
+    },
+    {
+      "key": "newsletter",
+      "label": "Newsletter",
+      "archive": true,
+      "description": "Editorial content, digests, blogs, product release updates, marketing promotions, Substack",
+      "examples": [
+        "This week in Tech Digest",
+        "Introducing our new feature v2.0"
+      ]
+    },
+    {
+      "key": "notifications",
+      "label": "Notifications",
+      "archive": true,
+      "description": "Automated service notices, one-time verification codes, OTPs, password resets, GitHub/Jira mentions, security alerts",
+      "examples": [
+        "Your verification code is 582914",
+        "Security alert: New login detected",
+        "[GitHub] Pull request #123 merged"
+      ]
+    }
+  ]
+}
