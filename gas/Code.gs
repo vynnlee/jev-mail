@@ -54,6 +54,18 @@ function installTrigger() {
 }
 
 /**
+ * TypeSafe API 키를 스크립트 속성에 등록하는 함수 (필요 시 실행)
+ */
+function setApiKey() {
+  var key = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
+  if (!key) {
+    Logger.log('⚠️ 스크립트 속성에 TYPESAFE_API_KEY를 설정해 주세요.');
+  } else {
+    Logger.log('✅ TYPESAFE_API_KEY가 이미 설정되어 있습니다.');
+  }
+}
+
+/**
  * 메인 트리거 함수: 인박스 내 읽지 않은 메일 자동 분류
  */
 function autoTriageInbox() {
