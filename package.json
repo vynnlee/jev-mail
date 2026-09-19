@@ -1,0 +1,17 @@
+{
+  "name": "jev-mail",
+  "version": "0.1.0",
+  "description": "TypeSafe AI Jev-powered Zero-Inbox email triage automation",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "node dist/index.js"
+  },
+  "keywords": ["typesafe", "jev", "gmail", "inbox-zero", "system-one"],
+  "author": "Vynn Lee",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}
