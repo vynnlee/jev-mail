@@ -13,8 +13,8 @@ export const CONFIG = {
   thresholds: {
     // 직접 조치 필요 여부 (0.0 ~ 1.0)
     requiresAction: 0.65,
-    // 오늘 중 긴급 처리 여부 (0.0 ~ 1.0)
-    isUrgent: 0.70,
+    // 최우선 중요/긴급 여부 (별표 표시 기준, 0.0 ~ 1.0)
+    isImportant: 0.70,
     // 모델 신뢰도 안전망 (이보다 낮으면 사람에게 Review 위임)
     minConfidence: 0.60,
   },

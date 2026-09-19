@@ -18,10 +18,10 @@ export function buildJevPayload(email: EmailItem) {
         instructions:
           'Does `email` clearly require the recipient to directly reply, make a decision, approve an item, or perform a manual task?',
       },
-      is_urgent: {
+      is_important: {
         type: 'noul',
         instructions:
-          'If action is required, does `email` imply urgency that needs handling within today (24 hours) or express critical time sensitivity?',
+          'Is this email high-priority, time-sensitive (handling needed within 24 hours), or from an important stakeholder requiring urgent attention?',
       },
       bucket: {
         type: 'choice',
@@ -66,12 +66,12 @@ export function evaluateTriageDecision(
   email: EmailItem,
   answers: {
     requires_action: { noul: number; confidence?: number };
-    is_urgent: { noul: number; confidence?: number };
+    is_important: { noul: number; confidence?: number };
     bucket: { choice: string; confidence?: number };
   }
 ): TriageResult {
   const reqActionNoul = answers.requires_action.noul;
-  const isUrgentNoul = answers.is_urgent.noul;
+  const isImportantNoul = answers.is_important.noul;
   const bucketChoice = answers.bucket.choice;
   const minConf = Math.min(
     answers.requires_action.confidence ?? 1.0,
@@ -87,29 +87,29 @@ export function evaluateTriageDecision(
       shouldArchive: false, // 인박스 보존
       actionType: 'REVIEW_FALLBACK',
       requiresActionScore: reqActionNoul,
-      isUrgentScore: isUrgentNoul,
+      isImportantScore: isImportantNoul,
       chosenBucket: bucketChoice,
       confidence: minConf,
       reasoning: `낮은 신뢰도 (${(minConf * 100).toFixed(0)}%)로 인해 수동 검토 라벨 부여`,
     };
   }
 
-  // 2. 후속 조치(Follow Up) 메일: 인박스 유지 + 긴급 시 별표
+  // 2. 후속 조치(Follow Up) 메일: 인박스 유지 + 중요/긴급 시 별표(⭐)
   if (reqActionNoul >= CONFIG.thresholds.requiresAction) {
-    const isTodayUrgent = isUrgentNoul >= CONFIG.thresholds.isUrgent;
+    const isImportant = isImportantNoul >= CONFIG.thresholds.isImportant;
     return {
       emailId: email.id,
       targetLabel: CONFIG.labels.followUp,
-      shouldStar: isTodayUrgent,
+      shouldStar: isImportant,
       shouldArchive: false, // 인박스 유지
-      actionType: isTodayUrgent ? 'KEEP_INBOX_STAR' : 'KEEP_INBOX',
+      actionType: isImportant ? 'KEEP_INBOX_STAR' : 'KEEP_INBOX',
       requiresActionScore: reqActionNoul,
-      isUrgentScore: isUrgentNoul,
+      isImportantScore: isImportantNoul,
       chosenBucket: bucketChoice,
       confidence: minConf,
-      reasoning: isTodayUrgent
-        ? '오늘 중 처리 필요 (Follow Up + ⭐ Star)'
-        : '일반 후속 조치 필요 (Follow Up)',
+      reasoning: isImportant
+        ? '중요/긴급 업무 (Follow Up + ⭐ Star)'
+        : '일반 후속 조치 (Follow Up)',
     };
   }
 

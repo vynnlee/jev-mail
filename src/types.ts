@@ -20,7 +20,7 @@ export interface TriageResult {
   shouldArchive: boolean;
   actionType: TriageActionType;
   requiresActionScore: number;
-  isUrgentScore: number;
+  isImportantScore: number;
   chosenBucket: string;
   confidence: number;
   reasoning: string;

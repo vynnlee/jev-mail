@@ -25,7 +25,7 @@ var CONFIG = {
   },
   thresholds: {
     requiresAction: 0.65,
-    isUrgent: 0.70,
+    isImportant: 0.70,
     minConfidence: 0.60,
   },
   typesafeEndpoint: 'https://api.typesafe.ai/v1/systemone',
@@ -127,10 +127,10 @@ function callJevTriage(emailData, apiKey) {
         instructions:
           'Does `email` clearly require the recipient to directly reply, make a decision, approve an item, or perform a manual task?',
       },
-      is_urgent: {
+      is_important: {
         type: 'noul',
         instructions:
-          'If action is required, does `email` imply urgency that needs handling within today (24 hours) or express critical time sensitivity?',
+          'Is this email high-priority, time-sensitive (handling needed within 24 hours), or from an important stakeholder requiring urgent attention?',
       },
       bucket: {
         type: 'choice',
@@ -165,7 +165,7 @@ function callJevTriage(emailData, apiKey) {
 
   var answers = json.answers;
   var reqAction = answers.requires_action.noul;
-  var isUrgent = answers.is_urgent.noul;
+  var isImportant = answers.is_important.noul;
   var bucket = answers.bucket.choice;
   var minConf = Math.min(
     answers.requires_action.confidence || 1.0,
@@ -177,10 +177,10 @@ function callJevTriage(emailData, apiKey) {
     return { targetLabel: CONFIG.labels.review, shouldStar: false, shouldArchive: false };
   }
 
-  // 2. 행동 필요 -> Follow Up (긴급 시 Star ON)
+  // 2. 행동 필요 -> Follow Up (중요/긴급 시 Star ON)
   if (reqAction >= CONFIG.thresholds.requiresAction) {
-    var urgent = isUrgent >= CONFIG.thresholds.isUrgent;
-    return { targetLabel: CONFIG.labels.followUp, shouldStar: urgent, shouldArchive: false };
+    var important = isImportant >= CONFIG.thresholds.isImportant;
+    return { targetLabel: CONFIG.labels.followUp, shouldStar: important, shouldArchive: false };
   }
 
   // 3. 비액션 -> 카테고리 라벨 부착 후 즉시 아카이브
