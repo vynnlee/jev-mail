@@ -1,0 +1,74 @@
+[
+  {
+    "id": "mock_01",
+    "sender": "sarah.lead@company.com",
+    "subject": "[Urgent] Q3 Roadmap approval needed by 5 PM today",
+    "snippet": "Hi team, please review the attached final Q3 proposal and give your sign-off before 5 PM today so we can proceed with execution. Thanks, Sarah",
+    "hasAttachment": true,
+    "expected": {
+      "label": "Follow Up",
+      "shouldStar": true,
+      "shouldArchive": false
+    }
+  },
+  {
+    "id": "mock_02",
+    "sender": "david.dev@partner.io",
+    "subject": "Question regarding webhook integration endpoints",
+    "snippet": "Hey, when you have some time this week, could you clarify whether your webhook payload supports custom auth headers? No immediate rush.",
+    "hasAttachment": false,
+    "expected": {
+      "label": "Follow Up",
+      "shouldStar": false,
+      "shouldArchive": false
+    }
+  },
+  {
+    "id": "mock_03",
+    "sender": "support@logistics-courier.com",
+    "subject": "Your package #KR-98214 has shipped and is in transit",
+    "snippet": "We have received your shipment request. Your parcel is currently on its way with estimated delivery in 2 business days. Track status here.",
+    "hasAttachment": false,
+    "expected": {
+      "label": "Pending",
+      "shouldStar": false,
+      "shouldArchive": true
+    }
+  },
+  {
+    "id": "mock_04",
+    "sender": "billing@cloud-services.com",
+    "subject": "Your receipt for Cloud Invoice #INV-2026-0919 ($49.00)",
+    "snippet": "Thank you for your payment. Your credit card ending in 4242 was charged $49.00 for your monthly subscription. PDF invoice attached.",
+    "hasAttachment": true,
+    "expected": {
+      "label": "Receipts",
+      "shouldStar": false,
+      "shouldArchive": true
+    }
+  },
+  {
+    "id": "mock_05",
+    "sender": "editor@tech-weekly-digest.com",
+    "subject": "Issue #142: How System One models are reshaping developer workflows",
+    "snippet": "Welcome to this week's edition! Today we dive deep into calibrated probability models, comparing them with generative text LLMs across industry benchmarks.",
+    "hasAttachment": false,
+    "expected": {
+      "label": "Newsletter",
+      "shouldStar": false,
+      "shouldArchive": true
+    }
+  },
+  {
+    "id": "mock_06",
+    "sender": "notifications@github.com",
+    "subject": "[GitHub] Pull request #84 merged into main (vynnlee/trendvisor)",
+    "snippet": "alex-dev merged 1 commit into main from feature/auth. View pull request #84 on GitHub.",
+    "hasAttachment": false,
+    "expected": {
+      "label": "Notifications",
+      "shouldStar": false,
+      "shouldArchive": true
+    }
+  }
+]

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "test": "node dist/index.js"
+    "simulate": "tsc && node dist/cli.js",
+    "test": "npm run simulate"
   },
   "keywords": ["typesafe", "jev", "gmail", "inbox-zero", "system-one"],
   "author": "Vynn Lee",

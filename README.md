@@ -1,94 +1,219 @@
-# Jev Mail: TypeSafe AI 기반 Zero-Inbox 자동화 시스템
+<div align="center">
 
-TypeSafe의 초고속 System One 모델인 **Jev**와 Gmail을 결합하여, 수신 메일을 실시간 분류하고 보관/별표를 자동화하는 **Zero-Inbox 파이프라인**입니다.
+# 📬 Jev-Mail
+### Autonomous 24/7 Zero-Inbox Triage for Gmail Powered by TypeSafe AI System One
 
----
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Engine: TypeSafe Jev](https://img.shields.io/badge/Engine-TypeSafe%20Jev%20(System%20One)-orange.svg)](https://typesafe.ai)
+[![Runtime: Google Apps Script](https://img.shields.io/badge/Runtime-Google%20Apps%20Script%20(Serverless)-green.svg)](https://script.google.com)
+[![Cost: 100% Free Cloud](https://img.shields.io/badge/Cloud%20Cost-%240%2Fmonth-brightgreen.svg)]()
+[![Type: TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org)
 
-## 1. 분류 및 아카이브 체계 (Taxonomy)
+<p align="center">
+  <b>Never sort your Gmail again.</b><br>
+  Always-on, cloud-native inbox triage that runs even when your computer is off.<br>
+  Classifies, labels, prioritizes (⭐), and archives incoming emails in under 250ms.
+</p>
 
-사용자가 확인해야 할 메일과 보관할 메일을 명확히 분리하여, **받은편지함(INBOX)에는 오직 오늘 처리할 메일만 남기는 것**을 목표로 합니다.
-
-### 라벨 및 액션 매트릭스
-
-| 라벨명 | 성격 및 대상 | Star (⭐) | INBOX 보존 | 설명 |
-| :--- | :--- | :---: | :---: | :--- |
-| **`Follow Up`** | 내가 직접 회신, 승인, 업무 처리를 해야 하는 메일 | **긴급/오늘 마감 건만 ON** | **유지** | 오늘 처리할 일은 ⭐가 켜지고, 일반 대기열은 ⭐ 없이 인박스에 남음 |
-| **`Pending`** | 상대방에게 공을 넘겨서 회신이나 결과를 기다리는 메일 | OFF | **아카이브** | 주 1~2회 `label:Pending` 검색을 통해 리마인드/독촉 관리 |
-| **`Receipts`** | 결제 확인서, Stripe 영수증, 송장, 세금계산서, 티켓 | OFF | **즉시 아카이브** | 인박스에서 즉시 치우고 세무/정산 시 검색용으로 라벨 보관 |
-| **`Newsletter`** | 구독 뉴스레터, 테크 블로그, 제품 릴리즈 소식 | OFF | **즉시 아카이브** | 인박스를 채우지 않고 여유 시간에 `Newsletter` 라벨에서 읽음 |
-| **`Notifications`** | GitHub, Jira, 슬랙 핑, 시스템 모니터링 로그, 보안 알림 | OFF | **즉시 아카이브** | 읽지 않고 넘겨도 무방한 시스템 기계 생성 메일 |
-| *(안전망)* **`Review`** | 모델 신뢰도(`confidence`)가 낮아 AI 판정이 애매한 메일 | OFF | **유지** | 오분류를 방지하기 위해 사용자 수동 검토용으로 인박스 보존 |
+[English](#english) • [한국어 가이드](#korean) • [1-Shot Agent Setup](#1-shot-deployment-with-coding-agents) • [Templates](#ready-to-use-templates)
 
 ---
 
-## 2. Jev 모델 판정 스펙 (System One Primitives)
+</div>
 
-단 1번의 API 호출(약 100ms)로 메일의 상태(`state`)에 대해 병렬 질의(`Parallel Speculative Fan-out`)를 수행합니다.
+<a name="english"></a>
+## ⚡ Why Jev-Mail?
 
-### State (입력)
-```json
-{
-  "sender": "sender@domain.com",
-  "subject": "Email Subject",
-  "snippet": "Email body preview text...",
-  "has_attachment": false
-}
+Traditional Gmail filters are brittle and break constantly. Generative LLMs (GPT-4o, Claude) are slow (3~8s), expensive ($0.03+/email), and hallucinate.
+
+**Jev-Mail** is powered by **TypeSafe AI's System One model (`Jev`)**:
+- 🚀 **Sub-250ms Latency**: 10x faster than traditional LLMs.
+- 📐 **Calibrated Probabilities (`noul`)**: Real mathematical probability outputs (0.0 to 1.0) rather than generated text, enabling fine-grained threshold tuning.
+- ☁️ **24/7 Zero-Maintenance Cloud Execution**: Runs entirely inside **Google Apps Script (GAS)**. Zero server fees, runs 24/7 on Google's infrastructure even when your laptop is closed.
+- 🔒 **Zero Token Expiration**: Uses native `GmailApp` within Google's own security perimeter. No third-party OAuth callbacks or token refresh headaches.
+- 🎯 **True Zero-Inbox**: Only emails requiring human action or review remain in `INBOX`. Everything else is categorized and archived automatically.
+
+---
+
+## 🤖 1-Shot Deployment with Coding Agents
+
+> **Have an AI Coding Agent?** (Claude Code, Antigravity, Cursor, Codex, OpenCode, Gemini CLI)  
+> You don't need to write or copy code manually. Simply give this prompt to your agent:
+
+```markdown
+You are setting up Jev-Mail on my Gmail account.
+Please read AGENTS.md in https://github.com/vynnlee/jev-mail (or this directory)
+and deploy the system to my Google Apps Script environment.
+
+My TypeSafe API Key: <YOUR_TYPESAFE_API_KEY_HERE>
+
+Follow the step-by-step instructions in AGENTS.md to:
+1. Validate the local build and run `npm run simulate`
+2. Push the Google Apps Script code to my account (via clasp or web guidance)
+3. Set the TYPESAFE_API_KEY in Script Properties
+4. Trigger the one-time `installTrigger` setup
+5. Help me verify my Gmail settings for optimal Zero-Inbox flow.
 ```
 
-### Questions (질문)
-```json
-{
-  "requires_action": {
-    "type": "noul",
-    "instructions": "Does this email require the recipient to directly reply, make a decision, approve a request, or take manual action?"
-  },
-  "is_urgent": {
-    "type": "noul",
-    "instructions": "If action is required, is this urgent or expected to be handled within today (24 hours)?"
-  },
-  "bucket": {
-    "type": "choice",
-    "instructions": "Classify the non-action category of this email.",
-    "criteria": {
-      "pending": "Emails where the recipient is waiting for someone else's reply, status update, package delivery, or external resolution",
-      "receipts": "Billing receipts, payment invoices, subscription renewals, tax invoices, ticket/hotel confirmations",
-      "newsletter": "Scheduled newsletters, product announcement digests, tech blogs, marketing promotions",
-      "notifications": "Automated system alerts, security codes, GitHub/Jira notifications, platform notices"
-    }
-  }
-}
+Your agent will inspect [`AGENTS.md`](./AGENTS.md) and handle the end-to-end setup autonomously.
+
+---
+
+## 🛠️ 3-Minute Manual Setup Guide
+
+Prefer to set it up yourself? It takes less than 3 minutes:
+
+### Step 1: Get your TypeSafe AI API Key
+Get your API key from the [TypeSafe AI Console](https://typesafe.ai).
+
+### Step 2: Create a Google Apps Script Project
+1. Navigate to [script.google.com/home](https://script.google.com/home) and click **New project**.
+2. Rename the project from *Untitled* to **`Jev-Mail-Triage`**.
+3. Replace the content of `Code.gs` with the code from:
+   - [`gas/Code.gs`](./gas/Code.gs) *(or [`templates/Code-english.gs`](./templates/Code-english.gs) / [`templates/Code-korean.gs`](./templates/Code-korean.gs))*.
+4. Press `Cmd+S` (or `Ctrl+S`) to save.
+
+### Step 3: Add your API Key to Script Properties
+1. In the left navigation, click the **Project Settings** icon (⚙️ gear).
+2. Scroll down to **Script Properties** and click **Add script property**.
+3. Enter:
+   - **Property**: `TYPESAFE_API_KEY`
+   - **Value**: `your_typesafe_api_key_here`
+4. Click **Save script properties**.
+
+### Step 4: Install the 24/7 Automation Trigger
+1. Return to the **Editor** (`< >` icon).
+2. In the top toolbar, select `installTrigger` from the function dropdown.
+3. Click **Run**.
+4. A Google authorization popup will appear:
+   - Click **Review permissions** -> Select your Google Account.
+   - Click **Advanced** (자세히) -> **Go to Jev-Mail-Triage (unsafe)**.
+   - Click **Allow**.
+5. You will see `✅ 24/7 자동 실행 트리거가 성공적으로 설치되었습니다. (주기: 5분)` in the execution log.
+
+🎉 **Done!** Google Cloud will now wake up every 5 minutes and triage your inbox automatically.
+
+---
+
+## 🎯 Recommended Gmail Settings: Starred (⭐) vs Important
+
+Google's legacy "Important" marker relies on noisy heuristic guesses that frequently mark newsletters or system pings as important.
+
+**Jev-Mail establishes a clean separation of concerns:**
+- **Disable Google's "Important" marker**:
+  - In Gmail, click **Settings (⚙️)** -> **See all settings** -> **Inbox**.
+  - Under **Importance markers**, select **No markers**.
+  - Under **Don't use my past actions to predict importance**, check the option.
+  - Save changes.
+- **Use the Starred (⭐) Mailbox for High-Priority Action**:
+  - `Jev-Mail` automatically stars emails if `is_important >= 0.70` (urgent within 24h or critical stakeholder).
+  - Your **Starred** folder becomes your true daily focus queue.
+
+---
+
+## 📊 The MECE 2-Axis Taxonomy
+
+```mermaid
+flowchart TD
+    A["📩 Incoming New Email"] --> B["⚡ TypeSafe Jev System One"]
+    
+    B --> C{"requires_action >= 0.55?"}
+    
+    C -- "YES (Direct Human Action)" --> D["🏷️ Label: 'Follow Up'"]
+    D --> E{"is_important >= 0.70?"}
+    E -- "YES (Urgent 24h)" --> F["⭐ Star ON + Retain in INBOX"]
+    E -- "NO (Normal Queue)" --> G["Retain in INBOX"]
+    
+    C -- "NO (Non-Action)" --> H{"Confidence >= 0.60?"}
+    H -- "Low Confidence" --> I["🏷️ Label: 'Review'<br>Retain in INBOX for safety"]
+    H -- "High Confidence" --> J{"Classify Bucket"}
+    
+    J -- "Waiting on others" --> K["🏷️ 'Pending' + 📥 ARCHIVE"]
+    J -- "Invoice / Payment" --> L["🏷️ 'Receipts' + 📥 ARCHIVE"]
+    J -- "Digest / Blog" --> M["🏷️ 'Newsletter' + 📥 ARCHIVE"]
+    J -- "Machine / Bot ping" --> N["🏷️ 'Notifications' + 📥 ARCHIVE"]
 ```
 
----
+### Classification Matrix
 
-## 3. 컴퓨터 전원과 무관한 24/7 상시 구동 방안
-
-내 PC/노트북이 꺼져 있어도 항상 Gmail에 붙어서 자동 분류가 동작하게 하는 방법입니다.
-
-### 방법 1. Google Apps Script (GAS) 트리거 ⭐ (강력 추천 / 비용 0원)
-* **원리**: 구글 클라우드에서 제공하는 무료 스크립트 엔진([script.google.com](https://script.google.com))에 코드를 올려두고 시간 기반 트리거(매 1분~5분)로 자동 실행.
-* **장점**:
-  - 내 컴퓨터가 꺼져 있어도 365일 24시간 완전 무중단 자동 실행.
-  - 서버 비용 0원, 인프라 관리 불필요.
-  - 구글 네이티브 권한(`GmailApp`)을 쓰므로 OAuth 만료나 리프레시 토큰 이슈가 없음.
-* **배포 파일**: [`gas/Code.gs`](./gas/Code.gs)
-
-### 방법 2. 초소형 클라우드 서버리스 (Cloudflare Workers / Vercel Cron)
-* Vercel Cron 또는 Cloudflare Cron Worker를 통해 주기적으로 Gmail API와 TypeSafe API를 호출.
+| Label | Description | Criteria | Star (⭐) | INBOX Lifecycle |
+| :--- | :--- | :--- | :---: | :---: |
+| **`Follow Up`** | Human action required | Direct reply, decision, sign-off, or manual task required. | **⭐ if Urgent (<24h)** | **Kept in INBOX** |
+| **`Pending`** | Waiting on external outcome | Awaiting another's response, parcel in transit, open support ticket. | OFF | **Archived** |
+| **`Receipts`** | Financial / Accounting | Purchase receipts, Stripe/bank transaction alerts, SaaS subscriptions. | OFF | **Archived** |
+| **`Newsletter`** | Knowledge reading | Technical digests, blogs, Substack, product updates, promotions. | OFF | **Archived** |
+| **`Notifications`** | Machine / Bot alerts | GitHub/Jira mentions, CI/CD builds, security codes, password resets. | OFF | **Archived** |
+| **`Review`** | Fallback safety net | Edge case where model confidence is below 60%. | OFF | **Kept in INBOX** |
 
 ---
 
-## 4. 디렉터리 구성
+## 🧪 Local Simulation & Testing
 
+You can test the entire pipeline locally against realistic mock emails before deploying to Google Apps Script:
+
+```bash
+# 1. Clone & install
+git clone https://github.com/vynnlee/jev-mail.git
+cd jev-mail
+npm install
+
+# 2. Build TypeScript
+npm run build
+
+# 3. Run simulation against live TypeSafe API
+TYPESAFE_API_KEY="your-typesafe-api-key" npm run simulate
+```
+
+### Simulation Output Example:
 ```text
-jev-mail/
-├── README.md             # 시스템 아키텍처 및 운영 문서
-├── gas/
-│   └── Code.gs           # 24/7 구글 클라우드 실행용 Apps Script 원본 코드
-├── src/
-│   ├── types.ts          # 데이터 모델 및 타입 정의
-│   ├── config.ts         # 라벨 및 판정 임계치 설정
-│   └── triage.ts         # Jev 판정 및 액션 매핑 엔진
-├── package.json
-└── tsconfig.json
+┌─────────┬───────────┬───────────────────────────────────────┬─────────────────┬──────────┬──────────┬─────────┬───────────┐
+│ (index) │ id        │ subject                               │ label           │ star     │ archive  │ latency │ status    │
+├─────────┼───────────┼───────────────────────────────────────┼─────────────────┼──────────┼──────────┼─────────┼───────────┤
+│ 0       │ 'mock_01' │ '[Urgent] Q3 Roadmap approval nee...' │ 'Follow Up'     │ '⭐ YES' │ '  NO '  │ '227ms' │ '✅ PASS' │
+│ 1       │ 'mock_02' │ 'Question regarding webhook integ...' │ 'Follow Up'     │ '  NO '  │ '  NO '  │ '213ms' │ '✅ PASS' │
+│ 2       │ 'mock_03' │ 'Your package #KR-98214 has shipp...' │ 'Pending'       │ '  NO '  │ '📥 YES' │ '217ms' │ '✅ PASS' │
+│ 3       │ 'mock_04' │ 'Your receipt for Cloud Invoice #...' │ 'Receipts'      │ '  NO '  │ '📥 YES' │ '240ms' │ '✅ PASS' │
+│ 4       │ 'mock_05' │ 'Issue #142: How System One model...' │ 'Newsletter'    │ '  NO '  │ '📥 YES' │ '210ms' │ '✅ PASS' │
+│ 5       │ 'mock_06' │ '[GitHub] Pull request #84 merged...' │ 'Notifications' │ '  NO '  │ '📥 YES' │ '229ms' │ '✅ PASS' │
+└─────────┴───────────┴───────────────────────────────────────┴─────────────────┴──────────┴──────────┴─────────┴───────────┘
 ```
+
+---
+
+## 📁 Ready-to-Use Templates
+
+Depending on your language and workflow preference, choose from:
+
+- 🇬🇧 [**`templates/Code-english.gs`**](./templates/Code-english.gs): Standard international labels (`Follow Up`, `Pending`, `Receipts`, `Newsletter`, `Notifications`, `Review`).
+- 🇰🇷 [**`templates/Code-korean.gs`**](./templates/Code-korean.gs): Korean localized labels (`처리할일`, `회신대기`, `결제영수증`, `뉴스레터`, `시스템알림`, `검토필요`).
+
+---
+
+<a name="korean"></a>
+## 🇰🇷 한국어 안내 (Korean Guide)
+
+### Jev-Mail 핵심 특징
+1. **컴퓨터가 꺼져 있어도 24/7 자동 작동**:
+   내 노트북을 닫거나 컴퓨터를 끄더라도, Google Apps Script가 구글 클라우드에서 5분마다 자동으로 새 메일을 확인하고 분류/정리합니다.
+2. **비용 0원 (완전 무료)**:
+   별도의 AWS나 서버리스 호스팅 비용 없이, 개인 구글 계정의 Apps Script 무료 할당량(일 20,000건+)만으로 평생 무료 구동됩니다.
+3. **완벽한 Zero-Inbox 실현**:
+   - `Receipts`(결제/영수증), `Newsletter`(뉴스레터), `Notifications`(기계 알림), `Pending`(회신 대기)은 라벨 부착 후 **즉시 아카이브(보관)**되어 받은편지함을 어지럽히지 않습니다.
+   - 내가 오늘 직접 확인하고 답장해야 하는 메일만 `Follow Up` 라벨과 함께 **받은편지함(INBOX)**에 남습니다.
+   - 오늘 마감되거나 중요한 긴급 건은 **별표(⭐)**가 자동으로 켜져 우선순위를 한눈에 파악할 수 있습니다.
+
+---
+
+## 🔐 Security & Privacy
+
+- **Zero-Storage**: Your emails are never stored in any database.
+- **Client-Side Google Execution**: The automation runs entirely inside your personal Google Apps Script container.
+- **Minimal Payload**: Only the sender, subject, and a truncated snippet (up to 1,000 characters) are transmitted via TLS to the TypeSafe AI inference endpoint.
+- **Safe Secrets**: Your `TYPESAFE_API_KEY` is securely stored in Google's encrypted `PropertiesService` (Script Properties), never hardcoded in source files.
+
+---
+
+## 📄 License
+
+Distributed under the **MIT License**. See [`LICENSE`](./LICENSE) for more information.
+Created with ❤️ by [Vynn Lee](https://github.com/vynnlee).

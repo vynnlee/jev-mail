@@ -11,8 +11,8 @@ export const CONFIG = {
 
   // 의사결정 임계치 (Thresholds)
   thresholds: {
-    // 직접 조치 필요 여부 (0.0 ~ 1.0)
-    requiresAction: 0.65,
+    // 직접 조치 필요 여부 (0.0 ~ 1.0, 0.55 이상이면 사람의 응답/조치 필요)
+    requiresAction: 0.55,
     // 최우선 중요/긴급 여부 (별표 표시 기준, 0.0 ~ 1.0)
     isImportant: 0.70,
     // 모델 신뢰도 안전망 (이보다 낮으면 사람에게 Review 위임)

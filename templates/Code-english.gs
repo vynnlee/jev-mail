@@ -1,19 +1,23 @@
 /**
- * Jev Mail - Google Apps Script 24/7 Cloud Automation
+ * ============================================================================
+ * Jev-Mail: Autonomous 24/7 Zero-Inbox Powered by TypeSafe AI (English Preset)
+ * ============================================================================
  *
- * 내 컴퓨터의 전원이 꺼져 있어도 구글 클라우드 서버에서 1~5분마다 자동으로
- * Gmail 인박스를 확인하고, TypeSafe Jev 모델의 판정에 따라 분류/아카이브/별표를 처리합니다.
+ * Repository: https://github.com/your-username/jev-mail
+ * License: MIT
  *
- * [설치 및 실행 방법]
- * 1. https://script.google.com 접속 -> '새 프로젝트' 생성
- * 2. 이 파일(Code.gs)의 내용을 복사하여 붙여넣기
- * 3. 좌측 '프로젝트 설정(톱니바퀴)' -> '스크립트 속성'에 TYPESAFE_API_KEY 추가
- * 4. 상단 함수 선택에서 'installTrigger' 선택 후 [실행] 클릭 (1회만 실행하면 영구 자동화 완료!)
+ * [Setup Instructions]
+ * 1. Open https://script.google.com and click 'New project'.
+ * 2. Rename the project to 'Jev-Mail-Triage'.
+ * 3. Replace all code in Code.gs with this file and save (Cmd+S).
+ * 4. Go to Project Settings (gear icon) -> Script Properties -> Add:
+ *    - Property: TYPESAFE_API_KEY
+ *    - Value: <Your TypeSafe AI API Key>
+ * 5. In the toolbar function dropdown, select 'installTrigger' and click 'Run'.
+ *    (Complete Google's one-time permission grant)
+ * 6. Done! Google Cloud will now automatically triage your inbox every 5 minutes.
  */
 
-// ==========================================
-// 1. 라벨 및 설정 정의
-// ==========================================
 var CONFIG = {
   labels: {
     followUp: 'Follow Up',
@@ -30,59 +34,43 @@ var CONFIG = {
   },
   typesafeEndpoint: 'https://api.typesafe.ai/v1/systemone',
   model: 'jev-latest',
-  maxBatchSize: 10, // 1회 실행 시 처리할 최대 메일 수
+  maxBatchSize: 10,
 };
 
 /**
- * 24/7 자동 실행 트리거 설치 (최초 1회 실행)
- * 매 5분마다 구글 클라우드에서 autoTriageInbox()를 자동 호출합니다.
+ * Installs a 24/7 background trigger (Run once)
+ * Fired every 5 minutes by Google Cloud infrastructure.
  */
 function installTrigger() {
-  // 기존 트리거 정리
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
     ScriptApp.deleteTrigger(triggers[i]);
   }
 
-  // 매 5분마다 실행되는 새 트리거 등록
   ScriptApp.newTrigger('autoTriageInbox')
     .timeBased()
     .everyMinutes(5)
     .create();
 
-  Logger.log('✅ 24/7 자동 실행 트리거가 성공적으로 설치되었습니다. (주기: 5분)');
+  Logger.log('✅ 24/7 background trigger successfully installed (Interval: 5 mins).');
 }
 
 /**
- * TypeSafe API 키를 스크립트 속성에 등록하는 함수 (필요 시 실행)
- */
-function setApiKey() {
-  var key = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
-  if (!key) {
-    Logger.log('⚠️ 스크립트 속성에 TYPESAFE_API_KEY를 설정해 주세요.');
-  } else {
-    Logger.log('✅ TYPESAFE_API_KEY가 이미 설정되어 있습니다.');
-  }
-}
-
-/**
- * 메인 트리거 함수: 인박스 내 읽지 않은 메일 자동 분류
+ * Main Triage Function: Fetches unread/unlabeled inbox threads and processes them.
  */
 function autoTriageInbox() {
   var apiKey = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
   if (!apiKey) {
-    Logger.log('❌ TYPESAFE_API_KEY 스크립트 속성이 설정되지 않았습니다.');
+    Logger.log('❌ Error: TYPESAFE_API_KEY script property is not set.');
     return;
   }
 
-  // 받은편지함(INBOX)의 최신 메일 10건 검색
   var threads = GmailApp.search('in:inbox', 0, CONFIG.maxBatchSize);
   if (threads.length === 0) {
-    Logger.log('인박스에 처리할 메일이 없습니다. (Zero-Inbox 상태)');
+    Logger.log('Inbox is clear. Zero-Inbox achieved! 🚀');
     return;
   }
 
-  // 필요한 라벨 캐시 및 생성
   var labelObjects = getOrCreateLabels();
 
   for (var i = 0; i < threads.length; i++) {
@@ -90,7 +78,7 @@ function autoTriageInbox() {
     var messages = thread.getMessages();
     var latestMessage = messages[messages.length - 1];
 
-    // 이미 시스템 라벨 중 하나라도 붙어있다면 건너뜀 (중복 처리 방지)
+    // Skip if already tagged by system
     if (hasAnySystemLabel(thread, labelObjects)) {
       continue;
     }
@@ -98,22 +86,22 @@ function autoTriageInbox() {
     var emailData = {
       sender: latestMessage.getFrom(),
       subject: latestMessage.getSubject(),
-      snippet: latestMessage.getPlainBody().substring(0, 1000), // 본문 앞 1000자
+      snippet: latestMessage.getPlainBody().substring(0, 1000),
       has_attachment: latestMessage.getAttachments().length > 0,
     };
 
     try {
       var decision = callJevTriage(emailData, apiKey);
       applyDecision(thread, latestMessage, decision, labelObjects);
-      Logger.log('처리 완료: [' + decision.targetLabel + '] ' + emailData.subject);
+      Logger.log('Processed: [' + decision.targetLabel + '] ' + emailData.subject);
     } catch (err) {
-      Logger.log('에러 발생 (' + emailData.subject + '): ' + err.toString());
+      Logger.log('Error processing (' + emailData.subject + '): ' + err.toString());
     }
   }
 }
 
 /**
- * TypeSafe Jev 모델 호출
+ * Calls TypeSafe Jev System One Model
  */
 function callJevTriage(emailData, apiKey) {
   var payload = {
@@ -160,7 +148,7 @@ function callJevTriage(emailData, apiKey) {
   var json = JSON.parse(response.getContentText());
 
   if (!json.answers) {
-    throw new Error('TypeSafe API 응답 오류: ' + response.getContentText());
+    throw new Error('TypeSafe API Error: ' + response.getContentText());
   }
 
   var answers = json.answers;
@@ -169,18 +157,18 @@ function callJevTriage(emailData, apiKey) {
   var bucket = answers.bucket.choice;
   var bucketConf = answers.bucket.confidence || 1.0;
 
-  // 1. 행동 필요 -> Follow Up (인박스 유지, 중요/긴급 시 Star ON)
+  // 1. Action Required -> Follow Up (Keep in Inbox, Star if Important)
   if (reqAction >= CONFIG.thresholds.requiresAction) {
     var important = isImportant >= CONFIG.thresholds.isImportant;
     return { targetLabel: CONFIG.labels.followUp, shouldStar: important, shouldArchive: false };
   }
 
-  // 2. 비액션 중 카테고리 확신도가 낮음 -> Review (사람 검토를 위해 인박스 보존)
+  // 2. Non-action with low category confidence -> Review (Retain in Inbox for user inspection)
   if (bucketConf < CONFIG.thresholds.minConfidence) {
     return { targetLabel: CONFIG.labels.review, shouldStar: false, shouldArchive: false };
   }
 
-  // 3. 비액션 -> 카테고리 라벨 부착 후 즉시 아카이브 (Zero-Inbox)
+  // 3. Non-Action Buckets (Label & Archive immediately for Zero-Inbox)
   var targetLabel = CONFIG.labels.notifications;
   if (bucket === 'pending') targetLabel = CONFIG.labels.pending;
   else if (bucket === 'receipts') targetLabel = CONFIG.labels.receipts;
@@ -190,7 +178,7 @@ function callJevTriage(emailData, apiKey) {
 }
 
 /**
- * 판정 결과에 따른 Gmail 실제 조작 실행
+ * Applies labels, stars, and archives according to decision
  */
 function applyDecision(thread, message, decision, labelObjects) {
   var label = labelObjects[decision.targetLabel];
@@ -198,14 +186,12 @@ function applyDecision(thread, message, decision, labelObjects) {
     thread.addLabel(label);
   }
 
-  // 별표(Star) 적용 여부
   if (decision.shouldStar) {
     message.star();
   }
 
-  // 아카이브(Archive) 적용 여부
   if (decision.shouldArchive) {
-    thread.moveToArchive(); // INBOX 라벨 제거 -> Zero-Inbox 달성!
+    thread.moveToArchive();
   }
 }
 
