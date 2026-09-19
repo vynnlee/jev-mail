@@ -34,7 +34,7 @@ No numeric prefixes, no emojis. Exactly 5 core categories and 1 safety fallback:
 | `Pending` | Waiting on external outcome | Waiting on response, package in transit, ticket update |
 | `Receipts` | Financial and legal notices | Invoices, Stripe/bank alerts, SaaS subscriptions |
 | `Newsletter` | Reading material | Technical digests, blogs, product updates, marketing |
-| `Notifications` | Machine and telemetry alerts | GitHub/Jira pings, CI/CD builds, security codes |
+| `Notifications` | Machine and telemetry alerts | GitHub/Jira pings, CI/CD builds, verification codes, OTPs, password resets |
 | `Review` | Low-confidence safety boundary | Confidence score below 0.60, retained in Inbox |
 
 ### Lifecycle Mailboxes

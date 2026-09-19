@@ -59,7 +59,7 @@ is_important >= 0.70?          YES            NO
 | `Pending` | Awaiting external outcome | Waiting on response, package in transit, ticket update | None | Archived |
 | `Receipts` | Financial and legal notices | Invoices, Stripe/bank alerts, SaaS subscriptions | None | Archived |
 | `Newsletter` | Reading material | Technical digests, blogs, product updates, marketing | None | Archived |
-| `Notifications` | Machine and telemetry alerts | GitHub/Jira pings, CI/CD builds, security codes | None | Archived |
+| `Notifications` | Machine and telemetry alerts | GitHub/Jira pings, CI/CD builds, verification codes, OTPs, password resets | None | Archived |
 | `Review` | Low-confidence safety boundary | Confidence score below 0.60 | None | Retained in INBOX |
 
 ---
@@ -152,19 +152,20 @@ TYPESAFE_API_KEY="your-api-key" npm run simulate
 Jev-Mail: System One Zero-Inbox Simulator
 =============================================================
 
-Loaded 6 mock email scenarios.
+Loaded 7 mock email scenarios.
 Evaluating with Jev (jev-latest)...
 
-┌─────────┬───────────┬───────────────────────────────────────┬─────────────────┬──────────┬──────────┬─────────┬───────────┐
-│ (index) │ id        │ subject                               │ label           │ star     │ archive  │ latency │ status    │
-├─────────┼───────────┼───────────────────────────────────────┼─────────────────┼──────────┼──────────┼─────────┼───────────┤
-│ 0       │ 'mock_01' │ '[Urgent] Q3 Roadmap approval nee...' │ 'Follow Up'     │ 'YES'    │ 'NO'     │ '659ms' │ 'PASS'    │
-│ 1       │ 'mock_02' │ 'Question regarding webhook integ...' │ 'Follow Up'     │ 'NO'     │ 'NO'     │ '639ms' │ 'PASS'    │
-│ 2       │ 'mock_03' │ 'Your package #KR-98214 has shipp...' │ 'Pending'       │ 'NO'     │ 'YES'    │ '292ms' │ 'PASS'    │
-│ 3       │ 'mock_04' │ 'Your receipt for Cloud Invoice #...' │ 'Receipts'      │ 'NO'     │ 'YES'    │ '225ms' │ 'PASS'    │
-│ 4       │ 'mock_05' │ 'Issue #142: How System One model...' │ 'Newsletter'    │ 'NO'     │ 'YES'    │ '287ms' │ 'PASS'    │
-│ 5       │ 'mock_06' │ '[GitHub] Pull request #84 merged...' │ 'Notifications' │ 'NO'     │ 'YES'    │ '219ms' │ 'PASS'    │
-└─────────┴───────────┴───────────────────────────────────────┴─────────────────┴──────────┴──────────┴─────────┴───────────┘
+┌─────────┬───────────┬───────────────────────────────────────┬─────────────────┬───────┬─────────┬─────────┬────────┐
+│ (index) │ id        │ subject                               │ label           │ star  │ archive │ latency │ status │
+├─────────┼───────────┼───────────────────────────────────────┼─────────────────┼───────┼─────────┼─────────┼────────┤
+│ 0       │ 'mock_01' │ '[Urgent] Q3 Roadmap approval nee...' │ 'Follow Up'     │ 'YES' │ 'NO'    │ '554ms' │ 'PASS' │
+│ 1       │ 'mock_02' │ 'Question regarding webhook integ...' │ 'Follow Up'     │ 'NO'  │ 'NO'    │ '612ms' │ 'PASS' │
+│ 2       │ 'mock_03' │ 'Your package #KR-98214 has shipp...' │ 'Pending'       │ 'NO'  │ 'YES'   │ '208ms' │ 'PASS' │
+│ 3       │ 'mock_04' │ 'Your receipt for Cloud Invoice #...' │ 'Receipts'      │ 'NO'  │ 'YES'   │ '270ms' │ 'PASS' │
+│ 4       │ 'mock_05' │ 'Issue #142: How System One model...' │ 'Newsletter'    │ 'NO'  │ 'YES'   │ '249ms' │ 'PASS' │
+│ 5       │ 'mock_06' │ '[GitHub] Pull request #84 merged...' │ 'Notifications' │ 'NO'  │ 'YES'   │ '220ms' │ 'PASS' │
+│ 6       │ 'mock_07' │ 'Your security verification code:...' │ 'Notifications' │ 'NO'  │ 'YES'   │ '208ms' │ 'PASS' │
+└─────────┴───────────┴───────────────────────────────────────┴─────────────────┴───────┴─────────┴─────────┴────────┘
 
 Simulation complete. All decisions verified against taxonomy.
 ```

@@ -70,5 +70,17 @@
       "shouldStar": false,
       "shouldArchive": true
     }
+  },
+  {
+    "id": "mock_07",
+    "sender": "security@service-auth.com",
+    "subject": "Your security verification code: 582914",
+    "snippet": "Here is your verification code: 582914. Use this one-time code to complete your login. This code expires in 10 minutes. If you did not request this code, please secure your account immediately.",
+    "hasAttachment": false,
+    "expected": {
+      "label": "Notifications",
+      "shouldStar": false,
+      "shouldArchive": true
+    }
   }
 ]

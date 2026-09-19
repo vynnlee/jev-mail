@@ -16,7 +16,7 @@ export function buildJevPayload(email: EmailItem) {
       requires_action: {
         type: 'noul',
         instructions:
-          'Does `email` clearly require the recipient to directly reply, make a decision, approve an item, or perform a manual task?',
+          'Does `email` clearly require the recipient to directly reply, make a decision, approve an item, or perform an ongoing task? Note: one-time verification codes, OTPs, login alerts, and automated notices do not require task follow-up.',
       },
       is_important: {
         type: 'noul',
@@ -50,8 +50,9 @@ export function buildJevPayload(email: EmailItem) {
             ],
           },
           notifications: {
-            what: "Automated service notices, GitHub/Jira mentions, password resets, social media pings, security verification codes",
+            what: "Automated service notices, one-time verification codes, OTPs, password resets, GitHub/Jira mentions, security alerts",
             examples: [
+              "Your verification code is 582914",
               "Security alert: New login detected",
               "[GitHub] Pull request #123 merged",
             ],
@@ -181,8 +182,9 @@ export function buildHistoricalJevPayload(email: EmailItem) {
             ],
           },
           notifications: {
-            what: "Automated service notices, GitHub/Jira mentions, password resets, social media pings, security verification codes",
+            what: "Automated service notices, one-time verification codes, OTPs, password resets, GitHub/Jira mentions, security alerts",
             examples: [
+              "Your verification code is 582914",
               "Security alert: New login detected",
               "[GitHub] Pull request #123 merged",
             ],

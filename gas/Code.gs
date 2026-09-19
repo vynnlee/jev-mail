@@ -181,7 +181,7 @@ function callJevTriage(emailData, apiKey) {
       requires_action: {
         type: 'noul',
         instructions:
-          'Does `email` clearly require the recipient to directly reply, make a decision, approve an item, or perform a manual task?',
+          'Does `email` clearly require the recipient to directly reply, make a decision, approve an item, or perform an ongoing task? Note: one-time verification codes, OTPs, login alerts, and automated notices do not require task follow-up.',
       },
       is_important: {
         type: 'noul',
@@ -196,7 +196,7 @@ function callJevTriage(emailData, apiKey) {
           pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
           receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
           newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
-          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security codes',
+          notifications: 'Automated service notices, one-time verification codes, OTPs, password resets, GitHub/Jira mentions, security alerts',
         },
       },
     },
@@ -263,7 +263,7 @@ function callJevHistoricalTriage(emailData, apiKey) {
           pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
           receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
           newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
-          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security codes',
+          notifications: 'Automated service notices, one-time verification codes, OTPs, password resets, GitHub/Jira mentions, security alerts',
         },
       },
     },
