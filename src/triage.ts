@@ -75,42 +75,42 @@ export function evaluateTriageDecision(
   const bucketChoice = answers.bucket.choice;
   const bucketConfidence = answers.bucket.confidence ?? 1.0;
 
-  // 1. 후속 조치(Follow Up) 메일: 인박스 유지 + 중요/긴급 시 별표(⭐)
+  // 1. Follow Up: retain in Inbox, star if important
   if (reqActionNoul >= CONFIG.thresholds.requiresAction) {
     const isImportant = isImportantNoul >= CONFIG.thresholds.isImportant;
     return {
       emailId: email.id,
       targetLabel: CONFIG.labels.followUp,
       shouldStar: isImportant,
-      shouldArchive: false, // 인박스 유지
+      shouldArchive: false,
       actionType: isImportant ? 'KEEP_INBOX_STAR' : 'KEEP_INBOX',
       requiresActionScore: reqActionNoul,
       isImportantScore: isImportantNoul,
       chosenBucket: bucketChoice,
       confidence: reqActionNoul,
       reasoning: isImportant
-        ? '중요/긴급 업무 (Follow Up + ⭐ Star)'
-        : '일반 후속 조치 (Follow Up)',
+        ? 'High-priority action item: retain in Inbox and star'
+        : 'Action item: retain in Inbox',
     };
   }
 
-  // 2. 비액션 메일 중 카테고리 신뢰도가 낮은 경우: 사람에게 Review 위임 (인박스 보존)
+  // 2. Non-action with low category confidence: fallback to Review
   if (bucketConfidence < CONFIG.thresholds.minConfidence) {
     return {
       emailId: email.id,
       targetLabel: CONFIG.labels.review,
       shouldStar: false,
-      shouldArchive: false, // 인박스 보존
+      shouldArchive: false,
       actionType: 'REVIEW_FALLBACK',
       requiresActionScore: reqActionNoul,
       isImportantScore: isImportantNoul,
       chosenBucket: bucketChoice,
       confidence: bucketConfidence,
-      reasoning: `낮은 카테고리 신뢰도 (${(bucketConfidence * 100).toFixed(0)}%)로 인해 Review 위임`,
+      reasoning: `Low category confidence (${(bucketConfidence * 100).toFixed(0)}%): routed to Review`,
     };
   }
 
-  // 3. 비액션 메일: 카테고리별 라벨 부여 후 즉시 아카이브 (Zero-Inbox)
+  // 3. Non-action: assign category label and archive immediately
   let targetLabel: string;
   switch (bucketChoice) {
     case 'pending':
@@ -132,20 +132,16 @@ export function evaluateTriageDecision(
     emailId: email.id,
     targetLabel,
     shouldStar: false,
-    shouldArchive: true, // 즉시 아카이브 (Zero-Inbox 달성)
+    shouldArchive: true,
     actionType: 'ARCHIVE_LABEL',
     requiresActionScore: reqActionNoul,
     isImportantScore: isImportantNoul,
     chosenBucket: bucketChoice,
     confidence: bucketConfidence,
-    reasoning: `보관 대상 분류 (${targetLabel}) -> 즉시 아카이브`,
+    reasoning: `Archived into ${targetLabel}`,
   };
 }
 
-/**
- * 과거 메일 전수 정리용 페이로드 빌더
- * (Star/Follow-Up 제외, 순수 카테고리 분류 목적)
- */
 export function buildHistoricalJevPayload(email: EmailItem) {
   return {
     model: CONFIG.typesafe.model,
@@ -197,12 +193,6 @@ export function buildHistoricalJevPayload(email: EmailItem) {
   };
 }
 
-/**
- * 과거 메일 판정 평가:
- * - Star: 무조건 false
- * - Follow Up: 미부여
- * - Archive: 무조건 true (인박스 정리)
- */
 export function evaluateHistoricalTriageDecision(
   email: EmailItem,
   answers: {
@@ -223,7 +213,7 @@ export function evaluateHistoricalTriageDecision(
       isImportantScore: 0,
       chosenBucket: bucketChoice,
       confidence: bucketConfidence,
-      reasoning: `과거 메일 신뢰도 낮음 -> Review 라벨 후 아카이브`,
+      reasoning: 'Low confidence historical email: labeled Review and archived',
     };
   }
 
@@ -254,6 +244,6 @@ export function evaluateHistoricalTriageDecision(
     isImportantScore: 0,
     chosenBucket: bucketChoice,
     confidence: bucketConfidence,
-    reasoning: `과거 메일 정리 (${targetLabel}) -> 아카이브`,
+    reasoning: `Historical email labeled ${targetLabel} and archived`,
   };
 }

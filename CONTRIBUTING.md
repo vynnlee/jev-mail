@@ -1,41 +1,39 @@
 # Contributing to Jev-Mail
 
-Thank you for your interest in improving `jev-mail`! We welcome community contributions, bug reports, and enhancements to our System One email triage pipeline.
+Contributions to Jev-Mail are welcome.
 
 ## Development Setup
 
-1. **Clone the repository**:
+1. Clone the repository:
    ```bash
    git clone https://github.com/vynnlee/jev-mail.git
    cd jev-mail
    ```
 
-2. **Install dependencies**:
+2. Install dependencies:
    ```bash
    npm install
    ```
 
-3. **Set up your TypeSafe API Key**:
-   Obtain an API key from [TypeSafe AI](https://typesafe.ai).
+3. Configure your TypeSafe API Key:
    ```bash
-   export TYPESAFE_API_KEY="your-api-key-here"
+   export TYPESAFE_API_KEY="your-api-key"
    ```
 
-4. **Run the local simulator**:
+4. Run the test simulator:
    ```bash
    npm run simulate
    ```
 
-## Contribution Guidelines
+## Guidelines
 
-- **Zero-Inbox Integrity**: Any changes to classification logic or thresholds must preserve the core premise: emails that do not require human action must be archived (`moveToArchive()`), keeping `INBOX` purely for active items.
-- **MECE Taxonomy**: We adhere to the 5 core mutually exclusive labels: `Follow Up`, `Pending`, `Receipts`, `Newsletter`, `Notifications`, plus `Review` as the safety boundary. Do not add frivolous labels or emojis.
-- **Syncing Google Apps Script**: If you modify `src/triage.ts` or `src/config.ts`, make sure to reflect corresponding logic updates in `gas/Code.gs`, `templates/Code-english.gs`, and `templates/Code-korean.gs`.
-- **Formatting**: Keep code clean, TypeScript types strict, and comments well-structured.
+- Zero-Inbox Integrity: Emails not requiring direct human action must be archived (`moveToArchive()`).
+- Taxonomy: Maintain the 5 mutually exclusive labels (`Follow Up`, `Pending`, `Receipts`, `Newsletter`, `Notifications`) and `Review` fallback. Do not add emojis or numeric prefixes to labels.
+- Synchronizing Templates: Updates to `src/triage.ts` or `src/config.ts` must be mirrored in `gas/Code.gs`, `templates/Code-english.gs`, and `templates/Code-korean.gs`.
+- Style: Do not use emojis, em-dashes, en-dashes, or middle-dots in documentation or codebase.
 
-## Submitting Pull Requests
+## Pull Requests
 
-1. Fork the repo and create your feature branch: `git checkout -b feat/my-improvement`.
-2. Ensure simulation tests pass: `npm run simulate`.
-3. Commit with clear commit messages following conventional commits (`feat:`, `fix:`, `docs:`).
-4. Push to your branch and open a Pull Request.
+1. Create a feature branch: `git checkout -b feat/my-improvement`.
+2. Verify all tests pass: `npm run simulate`.
+3. Submit a pull request with clear conventional commit messages.

@@ -1,31 +1,37 @@
-import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import fs from 'fs';
+import path from 'path';
 import { CONFIG } from './config.js';
 import { buildJevPayload, evaluateTriageDecision } from './triage.js';
 import type { EmailItem } from './types.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+interface MockItem extends EmailItem {
+  expected: {
+    label: string;
+    shouldStar: boolean;
+    shouldArchive: boolean;
+  };
+}
 
 async function runSimulation() {
+  const apiKey = process.env.TYPESAFE_API_KEY;
+  if (!apiKey) {
+    console.error('Error: TYPESAFE_API_KEY environment variable is required.');
+    process.exit(1);
+  }
+
+  const mockPath = path.resolve('examples/mock-emails.json');
+  const rawData = fs.readFileSync(mockPath, 'utf-8');
+  const mockEmails: MockItem[] = JSON.parse(rawData);
+
   console.log('\n=============================================================');
-  console.log('📬 Jev-Mail: System One Zero-Inbox Simulator');
+  console.log('Jev-Mail: System One Zero-Inbox Simulator');
   console.log('=============================================================\n');
+  console.log(`Loaded ${mockEmails.length} mock email scenarios.`);
+  console.log(`Evaluating with Jev (${CONFIG.typesafe.model})...\n`);
 
-  const apiKey =
-    process.env.TYPESAFE_API_KEY ||
-    'apikey_28229b69671a9ad416c8589107adc6cc11c_bf2eb54381f6d44ab80719c29f9febe4accb07509f57fb32473aabb40319fb41';
+  const results: any[] = [];
 
-  const mockPath = resolve(__dirname, '../examples/mock-emails.json');
-  const mockData: (EmailItem & { expected: { label: string; shouldStar: boolean; shouldArchive: boolean } })[] =
-    JSON.parse(readFileSync(mockPath, 'utf-8'));
-
-  console.log(`Loaded ${mockData.length} mock email scenarios.\nEvaluating with Jev (${CONFIG.typesafe.model})...\n`);
-
-  const results = [];
-
-  for (const item of mockData) {
+  for (const item of mockEmails) {
     const payload = buildJevPayload(item);
     const startTime = Date.now();
 
@@ -56,10 +62,10 @@ async function runSimulation() {
         id: item.id,
         subject: item.subject.length > 35 ? item.subject.substring(0, 32) + '...' : item.subject,
         label: decision.targetLabel,
-        star: decision.shouldStar ? '⭐ YES' : '  NO ',
-        archive: decision.shouldArchive ? '📥 YES' : '  NO ',
+        star: decision.shouldStar ? 'YES' : 'NO',
+        archive: decision.shouldArchive ? 'YES' : 'NO',
         latency: `${elapsed}ms`,
-        status: isPassed ? '✅ PASS' : '⚠️ CHECK',
+        status: isPassed ? 'PASS' : 'CHECK',
       });
     } catch (err: any) {
       results.push({
@@ -69,13 +75,13 @@ async function runSimulation() {
         star: 'N/A',
         archive: 'N/A',
         latency: 'FAIL',
-        status: `❌ ${err.message}`,
+        status: `FAIL: ${err.message}`,
       });
     }
   }
 
   console.table(results);
-  console.log('\nSimulation complete! All decisions verified against MECE matrix.\n');
+  console.log('\nSimulation complete. All decisions verified against taxonomy.\n');
 }
 
 runSimulation().catch(console.error);

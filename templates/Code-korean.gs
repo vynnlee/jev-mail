@@ -1,20 +1,14 @@
 /**
- * ============================================================================
- * Jev-Mail: TypeSafe AI 기반 24/7 클라우드 무중단 Zero-Inbox (한국어 라벨 프리셋)
- * ============================================================================
+ * Jev-Mail: Google Apps Script 24/7 Cloud Automation (한국어 라벨 템플릿)
  *
- * Repository: https://github.com/your-username/jev-mail
- * License: MIT
+ * 구글 클라우드에서 시간 기반 트리거로 상시 구동됩니다.
+ * TypeSafe Jev 모델의 판정에 따라 수신 메일을 분류, 라벨링, 아카이브 처리합니다.
  *
- * [간편 설치 가이드]
- * 1. https://script.google.com 접속 후 '새 프로젝트' 클릭
- * 2. 프로젝트 이름을 'Jev-Mail-Triage'로 변경
- * 3. Code.gs의 기본 내용을 지우고 이 파일 전체를 복사하여 붙여넣고 저장(Cmd+S)
- * 4. 좌측 프로젝트 설정(톱니바퀴) -> '스크립트 속성' -> 속성 추가:
- *    - 속성: TYPESAFE_API_KEY
- *    - 값: <본인의 TypeSafe AI API 키>
- * 5. 상단 함수 선택에서 'installTrigger' 선택 후 [실행] 클릭 (구글 권한 1회 승인)
- * 6. 완료! 컴퓨터가 꺼져 있어도 구글 클라우드가 5분마다 인박스를 자동 분류/아카이브합니다.
+ * 설치 방법:
+ * 1. https://script.google.com 접속 후 Jev-Mail-Triage 프로젝트 생성
+ * 2. Code.gs 파일에 이 내용을 붙여넣기
+ * 3. 좌측 프로젝트 설정의 스크립트 속성에 TYPESAFE_API_KEY 추가
+ * 4. 상단 함수 선택에서 installTrigger 선택 후 실행 클릭
  */
 
 var CONFIG = {
@@ -36,10 +30,6 @@ var CONFIG = {
   maxBatchSize: 10,
 };
 
-/**
- * 24/7 자동 실행 트리거 설치 (최초 1회 실행)
- * 매 5분마다 구글 클라우드에서 autoTriageInbox()를 자동 호출합니다.
- */
 function installTrigger() {
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
@@ -51,22 +41,28 @@ function installTrigger() {
     .everyMinutes(5)
     .create();
 
-  Logger.log('✅ 24/7 자동 실행 트리거가 성공적으로 설치되었습니다. (주기: 5분)');
+  Logger.log('[OK] 24/7 자동 실행 트리거 설치 완료 (주기: 5분)');
 }
 
-/**
- * 메인 트리거 함수: 인박스 내 읽지 않은 메일 자동 분류
- */
+function setApiKey() {
+  var key = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
+  if (!key) {
+    Logger.log('[WARN] 스크립트 속성에 TYPESAFE_API_KEY를 설정해 주세요.');
+  } else {
+    Logger.log('[OK] TYPESAFE_API_KEY가 설정되어 있습니다.');
+  }
+}
+
 function autoTriageInbox() {
   var apiKey = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
   if (!apiKey) {
-    Logger.log('❌ TYPESAFE_API_KEY 스크립트 속성이 설정되지 않았습니다.');
+    Logger.log('[ERROR] TYPESAFE_API_KEY 스크립트 속성이 없습니다.');
     return;
   }
 
   var threads = GmailApp.search('in:inbox', 0, CONFIG.maxBatchSize);
   if (threads.length === 0) {
-    Logger.log('인박스에 처리할 메일이 없습니다. (Zero-Inbox 상태) 🚀');
+    Logger.log('[INFO] 인박스가 비어 있습니다.');
     return;
   }
 
@@ -77,7 +73,6 @@ function autoTriageInbox() {
     var messages = thread.getMessages();
     var latestMessage = messages[messages.length - 1];
 
-    // 이미 시스템 라벨 중 하나라도 붙어있다면 건너뜀 (중복 처리 방지)
     if (hasAnySystemLabel(thread, labelObjects)) {
       continue;
     }
@@ -92,33 +87,25 @@ function autoTriageInbox() {
     try {
       var decision = callJevTriage(emailData, apiKey);
       applyDecision(thread, latestMessage, decision, labelObjects);
-      Logger.log('처리 완료: [' + decision.targetLabel + '] ' + emailData.subject);
+      Logger.log('[PROCESSED] [' + decision.targetLabel + '] ' + emailData.subject);
     } catch (err) {
-      Logger.log('에러 발생 (' + emailData.subject + '): ' + err.toString());
+      Logger.log('[ERROR] ' + emailData.subject + ': ' + err.toString());
     }
   }
 }
 
-/**
- * 과거 메일 전수 재분류 및 Zero-Inbox 아카이브 실행
- * - 현재 받은편지함(INBOX)에 쌓여 있는 과거 메일을 순차적으로 재분류합니다.
- * - 과거 메일이므로 별표(⭐)나 처리할일 라벨은 일절 부여하지 않습니다.
- * - 순수 카테고리(결제영수증, 뉴스레터, 시스템알림, 회신대기, 검토필요)로 분류 후 즉시 아카이브합니다.
- *
- * @param {number} maxThreads 처리할 최대 스레드 수 (기본값: 100)
- */
 function triageHistoricalInbox(maxThreads) {
   maxThreads = maxThreads || 100;
   var apiKey = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
   if (!apiKey) {
-    Logger.log('❌ TYPESAFE_API_KEY 스크립트 속성이 설정되지 않았습니다.');
+    Logger.log('[ERROR] TYPESAFE_API_KEY 스크립트 속성이 없습니다.');
     return;
   }
 
   var threads = GmailApp.search('in:inbox', 0, maxThreads);
-  Logger.log('📥 과거 메일 재분류 시작: 총 ' + threads.length + '개의 인박스 스레드 발견');
+  Logger.log('[INFO] 과거 메일 재분류 시작: 총 ' + threads.length + '개 스레드 발견');
   if (threads.length === 0) {
-    Logger.log('인박스에 메일이 없습니다. 이미 Zero-Inbox 상태입니다.');
+    Logger.log('[INFO] 인박스가 비어 있습니다.');
     return;
   }
 
@@ -131,12 +118,10 @@ function triageHistoricalInbox(maxThreads) {
     var messages = thread.getMessages();
     var latestMessage = messages[messages.length - 1];
 
-    // 과거 메일이므로 기존에 붙어있던 처리할일 라벨은 제거
     if (followUpLabel && threadHasLabel(thread, followUpLabel)) {
       thread.removeLabel(followUpLabel);
     }
 
-    // 이미 다른 표준 카테고리 라벨이 붙어있는 과거 메일인 경우 즉시 아카이브만 진행
     var existingLabel = getExistingCategoryLabel(thread, labelObjects);
     if (existingLabel) {
       thread.moveToArchive();
@@ -158,22 +143,18 @@ function triageHistoricalInbox(maxThreads) {
       if (label) {
         thread.addLabel(label);
       }
-      // 과거 메일이므로 절대 별표(Star)를 달지 않고 즉시 아카이브
       thread.moveToArchive();
 
       processed++;
       Logger.log('[' + processed + '/' + threads.length + '] 분류 및 아카이브 완료: [' + decision.targetLabel + '] ' + emailData.subject);
     } catch (err) {
-      Logger.log('에러 발생 (' + emailData.subject + '): ' + err.toString());
+      Logger.log('[ERROR] ' + emailData.subject + ': ' + err.toString());
     }
   }
 
-  Logger.log('🎉 과거 메일 총 ' + processed + '건 재분류 및 아카이브 완료! 인박스가 비워졌습니다.');
+  Logger.log('[DONE] 과거 메일 총 ' + processed + '건 재분류 및 아카이브 완료.');
 }
 
-/**
- * TypeSafe Jev 모델 호출
- */
 function callJevTriage(emailData, apiKey) {
   var payload = {
     model: CONFIG.model,
@@ -196,10 +177,10 @@ function callJevTriage(emailData, apiKey) {
         instructions:
           'If this email does not require direct action, which category does it primarily belong to?',
         criteria: {
-          pending: 'Awaiting another person reply, package delivery tracking, ticket response, or ongoing workflow resolution',
+          pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
           receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
           newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
-          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security verification codes',
+          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security codes',
         },
       },
     },
@@ -228,18 +209,15 @@ function callJevTriage(emailData, apiKey) {
   var bucket = answers.bucket.choice;
   var bucketConf = answers.bucket.confidence || 1.0;
 
-  // 1. 행동 필요 -> 처리할일 (인박스 유지, 중요/긴급 시 Star ON)
   if (reqAction >= CONFIG.thresholds.requiresAction) {
     var important = isImportant >= CONFIG.thresholds.isImportant;
     return { targetLabel: CONFIG.labels.followUp, shouldStar: important, shouldArchive: false };
   }
 
-  // 2. 비액션 중 카테고리 확신도가 낮음 -> 검토필요 (사람 검토를 위해 인박스 보존)
   if (bucketConf < CONFIG.thresholds.minConfidence) {
     return { targetLabel: CONFIG.labels.review, shouldStar: false, shouldArchive: false };
   }
 
-  // 3. 비액션 -> 카테고리 라벨 부착 후 즉시 아카이브 (Zero-Inbox)
   var targetLabel = CONFIG.labels.notifications;
   if (bucket === 'pending') targetLabel = CONFIG.labels.pending;
   else if (bucket === 'receipts') targetLabel = CONFIG.labels.receipts;
@@ -248,9 +226,59 @@ function callJevTriage(emailData, apiKey) {
   return { targetLabel: targetLabel, shouldStar: false, shouldArchive: true };
 }
 
-/**
- * 판정 결과에 따른 Gmail 실제 조작 실행
- */
+function callJevHistoricalTriage(emailData, apiKey) {
+  var payload = {
+    model: CONFIG.model,
+    state: {
+      email: emailData,
+    },
+    questions: {
+      bucket: {
+        type: 'choice',
+        instructions:
+          'Which category does this historical email belong to?',
+        criteria: {
+          pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
+          receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
+          newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
+          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security codes',
+        },
+      },
+    },
+  };
+
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'Bearer ' + apiKey,
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  };
+
+  var response = UrlFetchApp.fetch(CONFIG.typesafeEndpoint, options);
+  var json = JSON.parse(response.getContentText());
+
+  if (!json.answers || !json.answers.bucket) {
+    throw new Error('TypeSafe API 응답 오류: ' + response.getContentText());
+  }
+
+  var bucket = json.answers.bucket.choice;
+  var bucketConf = json.answers.bucket.confidence || 1.0;
+
+  if (bucketConf < CONFIG.thresholds.minConfidence) {
+    return { targetLabel: CONFIG.labels.review };
+  }
+
+  var targetLabel = CONFIG.labels.notifications;
+  if (bucket === 'pending') targetLabel = CONFIG.labels.pending;
+  else if (bucket === 'receipts') targetLabel = CONFIG.labels.receipts;
+  else if (bucket === 'newsletter') targetLabel = CONFIG.labels.newsletter;
+
+  return { targetLabel: targetLabel };
+}
+
 function applyDecision(thread, message, decision, labelObjects) {
   var label = labelObjects[decision.targetLabel];
   if (label) {
@@ -313,60 +341,4 @@ function getExistingCategoryLabel(thread, labelObjects) {
     }
   }
   return null;
-}
-
-/**
- * 과거 메일 전용 Jev 판정 (Star/Follow-Up 제외, 카테고리 중심 분류)
- */
-function callJevHistoricalTriage(emailData, apiKey) {
-  var payload = {
-    model: CONFIG.model,
-    state: {
-      email: emailData,
-    },
-    questions: {
-      bucket: {
-        type: 'choice',
-        instructions:
-          'Which category does this historical email belong to?',
-        criteria: {
-          pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
-          receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
-          newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
-          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security codes',
-        },
-      },
-    },
-  };
-
-  var options = {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      Authorization: 'Bearer ' + apiKey,
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true,
-  };
-
-  var response = UrlFetchApp.fetch(CONFIG.typesafeEndpoint, options);
-  var json = JSON.parse(response.getContentText());
-
-  if (!json.answers || !json.answers.bucket) {
-    throw new Error('TypeSafe API 응답 오류: ' + response.getContentText());
-  }
-
-  var bucket = json.answers.bucket.choice;
-  var bucketConf = json.answers.bucket.confidence || 1.0;
-
-  if (bucketConf < CONFIG.thresholds.minConfidence) {
-    return { targetLabel: CONFIG.labels.review };
-  }
-
-  var targetLabel = CONFIG.labels.notifications;
-  if (bucket === 'pending') targetLabel = CONFIG.labels.pending;
-  else if (bucket === 'receipts') targetLabel = CONFIG.labels.receipts;
-  else if (bucket === 'newsletter') targetLabel = CONFIG.labels.newsletter;
-
-  return { targetLabel: targetLabel };
 }

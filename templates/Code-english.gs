@@ -1,21 +1,14 @@
 /**
- * ============================================================================
- * Jev-Mail: Autonomous 24/7 Zero-Inbox Powered by TypeSafe AI (English Preset)
- * ============================================================================
+ * Jev-Mail: Google Apps Script 24/7 Cloud Automation (English Template)
  *
- * Repository: https://github.com/your-username/jev-mail
- * License: MIT
+ * Runs automatically on Google Cloud infrastructure via time-driven triggers.
+ * Triages, labels, prioritizes, and archives incoming emails using TypeSafe Jev.
  *
- * [Setup Instructions]
- * 1. Open https://script.google.com and click 'New project'.
- * 2. Rename the project to 'Jev-Mail-Triage'.
- * 3. Replace all code in Code.gs with this file and save (Cmd+S).
- * 4. Go to Project Settings (gear icon) -> Script Properties -> Add:
- *    - Property: TYPESAFE_API_KEY
- *    - Value: <Your TypeSafe AI API Key>
- * 5. In the toolbar function dropdown, select 'installTrigger' and click 'Run'.
- *    (Complete Google's one-time permission grant)
- * 6. Done! Google Cloud will now automatically triage your inbox every 5 minutes.
+ * Setup:
+ * 1. Open https://script.google.com and create a project named Jev-Mail-Triage.
+ * 2. Paste this Code.gs content.
+ * 3. In Project Settings, add Script Property: TYPESAFE_API_KEY.
+ * 4. Run installTrigger once from the function dropdown.
  */
 
 var CONFIG = {
@@ -37,10 +30,6 @@ var CONFIG = {
   maxBatchSize: 10,
 };
 
-/**
- * Installs a 24/7 background trigger (Run once)
- * Fired every 5 minutes by Google Cloud infrastructure.
- */
 function installTrigger() {
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
@@ -52,22 +41,28 @@ function installTrigger() {
     .everyMinutes(5)
     .create();
 
-  Logger.log('✅ 24/7 background trigger successfully installed (Interval: 5 mins).');
+  Logger.log('[OK] 24/7 trigger installed successfully (interval: 5 minutes).');
 }
 
-/**
- * Main Triage Function: Fetches unread/unlabeled inbox threads and processes them.
- */
+function setApiKey() {
+  var key = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
+  if (!key) {
+    Logger.log('[WARN] Please set TYPESAFE_API_KEY in Script Properties.');
+  } else {
+    Logger.log('[OK] TYPESAFE_API_KEY is configured.');
+  }
+}
+
 function autoTriageInbox() {
   var apiKey = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
   if (!apiKey) {
-    Logger.log('❌ Error: TYPESAFE_API_KEY script property is not set.');
+    Logger.log('[ERROR] TYPESAFE_API_KEY script property is missing.');
     return;
   }
 
   var threads = GmailApp.search('in:inbox', 0, CONFIG.maxBatchSize);
   if (threads.length === 0) {
-    Logger.log('Inbox is clear. Zero-Inbox achieved! 🚀');
+    Logger.log('[INFO] Inbox empty. Zero-Inbox maintained.');
     return;
   }
 
@@ -78,7 +73,6 @@ function autoTriageInbox() {
     var messages = thread.getMessages();
     var latestMessage = messages[messages.length - 1];
 
-    // Skip if already tagged by system
     if (hasAnySystemLabel(thread, labelObjects)) {
       continue;
     }
@@ -93,33 +87,25 @@ function autoTriageInbox() {
     try {
       var decision = callJevTriage(emailData, apiKey);
       applyDecision(thread, latestMessage, decision, labelObjects);
-      Logger.log('Processed: [' + decision.targetLabel + '] ' + emailData.subject);
+      Logger.log('[PROCESSED] [' + decision.targetLabel + '] ' + emailData.subject);
     } catch (err) {
-      Logger.log('Error processing (' + emailData.subject + '): ' + err.toString());
+      Logger.log('[ERROR] ' + emailData.subject + ': ' + err.toString());
     }
   }
 }
 
-/**
- * Historical Zero-Inbox Triage
- * - Re-triages backlog emails sitting in INBOX.
- * - Because these are past emails, neither Star (⭐) nor Follow Up labels are ever applied.
- * - Categorizes into Receipts, Newsletter, Notifications, Pending, or Review and archives immediately.
- *
- * @param {number} maxThreads Maximum number of inbox threads to process (default: 100)
- */
 function triageHistoricalInbox(maxThreads) {
   maxThreads = maxThreads || 100;
   var apiKey = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
   if (!apiKey) {
-    Logger.log('❌ TYPESAFE_API_KEY script property is not set.');
+    Logger.log('[ERROR] TYPESAFE_API_KEY script property is missing.');
     return;
   }
 
   var threads = GmailApp.search('in:inbox', 0, maxThreads);
-  Logger.log('📥 Historical triage initiated: ' + threads.length + ' inbox threads found');
+  Logger.log('[INFO] Historical triage initiated: ' + threads.length + ' threads found.');
   if (threads.length === 0) {
-    Logger.log('Inbox is already empty. Zero-Inbox achieved!');
+    Logger.log('[INFO] Inbox already empty. Zero-Inbox maintained.');
     return;
   }
 
@@ -132,12 +118,10 @@ function triageHistoricalInbox(maxThreads) {
     var messages = thread.getMessages();
     var latestMessage = messages[messages.length - 1];
 
-    // Strip any existing Follow Up label since it is a historical email
     if (followUpLabel && threadHasLabel(thread, followUpLabel)) {
       thread.removeLabel(followUpLabel);
     }
 
-    // If it already has another valid category label, simply archive
     var existingLabel = getExistingCategoryLabel(thread, labelObjects);
     if (existingLabel) {
       thread.moveToArchive();
@@ -159,22 +143,18 @@ function triageHistoricalInbox(maxThreads) {
       if (label) {
         thread.addLabel(label);
       }
-      // Never star past emails, archive immediately to reach Zero-Inbox
       thread.moveToArchive();
 
       processed++;
-      Logger.log('[' + processed + '/' + threads.length + '] Triaged & archived: [' + decision.targetLabel + '] ' + emailData.subject);
+      Logger.log('[' + processed + '/' + threads.length + '] Labeled & archived: [' + decision.targetLabel + '] ' + emailData.subject);
     } catch (err) {
-      Logger.log('Error (' + emailData.subject + '): ' + err.toString());
+      Logger.log('[ERROR] ' + emailData.subject + ': ' + err.toString());
     }
   }
 
-  Logger.log('🎉 Historical triage complete: ' + processed + ' emails organized & archived!');
+  Logger.log('[DONE] Historical triage completed: ' + processed + ' threads processed.');
 }
 
-/**
- * Calls TypeSafe Jev System One Model
- */
 function callJevTriage(emailData, apiKey) {
   var payload = {
     model: CONFIG.model,
@@ -197,10 +177,10 @@ function callJevTriage(emailData, apiKey) {
         instructions:
           'If this email does not require direct action, which category does it primarily belong to?',
         criteria: {
-          pending: 'Awaiting another person reply, package delivery tracking, ticket response, or ongoing workflow resolution',
+          pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
           receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
           newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
-          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security verification codes',
+          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security codes',
         },
       },
     },
@@ -220,7 +200,7 @@ function callJevTriage(emailData, apiKey) {
   var json = JSON.parse(response.getContentText());
 
   if (!json.answers) {
-    throw new Error('TypeSafe API Error: ' + response.getContentText());
+    throw new Error('TypeSafe API response error: ' + response.getContentText());
   }
 
   var answers = json.answers;
@@ -229,18 +209,15 @@ function callJevTriage(emailData, apiKey) {
   var bucket = answers.bucket.choice;
   var bucketConf = answers.bucket.confidence || 1.0;
 
-  // 1. Action Required -> Follow Up (Keep in Inbox, Star if Important)
   if (reqAction >= CONFIG.thresholds.requiresAction) {
     var important = isImportant >= CONFIG.thresholds.isImportant;
     return { targetLabel: CONFIG.labels.followUp, shouldStar: important, shouldArchive: false };
   }
 
-  // 2. Non-action with low category confidence -> Review (Retain in Inbox for user inspection)
   if (bucketConf < CONFIG.thresholds.minConfidence) {
     return { targetLabel: CONFIG.labels.review, shouldStar: false, shouldArchive: false };
   }
 
-  // 3. Non-Action Buckets (Label & Archive immediately for Zero-Inbox)
   var targetLabel = CONFIG.labels.notifications;
   if (bucket === 'pending') targetLabel = CONFIG.labels.pending;
   else if (bucket === 'receipts') targetLabel = CONFIG.labels.receipts;
@@ -249,9 +226,59 @@ function callJevTriage(emailData, apiKey) {
   return { targetLabel: targetLabel, shouldStar: false, shouldArchive: true };
 }
 
-/**
- * Applies labels, stars, and archives according to decision
- */
+function callJevHistoricalTriage(emailData, apiKey) {
+  var payload = {
+    model: CONFIG.model,
+    state: {
+      email: emailData,
+    },
+    questions: {
+      bucket: {
+        type: 'choice',
+        instructions:
+          'Which category does this historical email belong to?',
+        criteria: {
+          pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
+          receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
+          newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
+          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security codes',
+        },
+      },
+    },
+  };
+
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'Bearer ' + apiKey,
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  };
+
+  var response = UrlFetchApp.fetch(CONFIG.typesafeEndpoint, options);
+  var json = JSON.parse(response.getContentText());
+
+  if (!json.answers || !json.answers.bucket) {
+    throw new Error('TypeSafe API response error: ' + response.getContentText());
+  }
+
+  var bucket = json.answers.bucket.choice;
+  var bucketConf = json.answers.bucket.confidence || 1.0;
+
+  if (bucketConf < CONFIG.thresholds.minConfidence) {
+    return { targetLabel: CONFIG.labels.review };
+  }
+
+  var targetLabel = CONFIG.labels.notifications;
+  if (bucket === 'pending') targetLabel = CONFIG.labels.pending;
+  else if (bucket === 'receipts') targetLabel = CONFIG.labels.receipts;
+  else if (bucket === 'newsletter') targetLabel = CONFIG.labels.newsletter;
+
+  return { targetLabel: targetLabel };
+}
+
 function applyDecision(thread, message, decision, labelObjects) {
   var label = labelObjects[decision.targetLabel];
   if (label) {
@@ -314,60 +341,4 @@ function getExistingCategoryLabel(thread, labelObjects) {
     }
   }
   return null;
-}
-
-/**
- * Historical email Jev classification (no star, no follow-up)
- */
-function callJevHistoricalTriage(emailData, apiKey) {
-  var payload = {
-    model: CONFIG.model,
-    state: {
-      email: emailData,
-    },
-    questions: {
-      bucket: {
-        type: 'choice',
-        instructions:
-          'Which category does this historical email belong to?',
-        criteria: {
-          pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
-          receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
-          newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
-          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security codes',
-        },
-      },
-    },
-  };
-
-  var options = {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      Authorization: 'Bearer ' + apiKey,
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true,
-  };
-
-  var response = UrlFetchApp.fetch(CONFIG.typesafeEndpoint, options);
-  var json = JSON.parse(response.getContentText());
-
-  if (!json.answers || !json.answers.bucket) {
-    throw new Error('TypeSafe API Error: ' + response.getContentText());
-  }
-
-  var bucket = json.answers.bucket.choice;
-  var bucketConf = json.answers.bucket.confidence || 1.0;
-
-  if (bucketConf < CONFIG.thresholds.minConfidence) {
-    return { targetLabel: CONFIG.labels.review };
-  }
-
-  var targetLabel = CONFIG.labels.notifications;
-  if (bucket === 'pending') targetLabel = CONFIG.labels.pending;
-  else if (bucket === 'receipts') targetLabel = CONFIG.labels.receipts;
-  else if (bucket === 'newsletter') targetLabel = CONFIG.labels.newsletter;
-
-  return { targetLabel: targetLabel };
 }

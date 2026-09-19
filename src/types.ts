@@ -8,10 +8,10 @@ export interface EmailItem {
 }
 
 export type TriageActionType =
-  | 'KEEP_INBOX_STAR'    // Follow Up (긴급): 인박스 유지 + 별표
-  | 'KEEP_INBOX'         // Follow Up (일반): 인박스 유지
-  | 'ARCHIVE_LABEL'      // 라벨 부착 후 즉시 아카이브
-  | 'REVIEW_FALLBACK';   // 불확실(Confidence 낮음): Review 라벨 부착 후 인박스 보존
+  | 'KEEP_INBOX_STAR'    // Follow Up (urgent): retain in Inbox and star
+  | 'KEEP_INBOX'         // Follow Up (normal): retain in Inbox
+  | 'ARCHIVE_LABEL'      // Label and archive immediately
+  | 'REVIEW_FALLBACK';   // Low confidence: assign Review label and retain in Inbox
 
 export interface TriageResult {
   emailId: string;
