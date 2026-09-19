@@ -101,6 +101,78 @@ function autoTriageInbox() {
 }
 
 /**
+ * Historical Zero-Inbox Triage
+ * - Re-triages backlog emails sitting in INBOX.
+ * - Because these are past emails, neither Star (⭐) nor Follow Up labels are ever applied.
+ * - Categorizes into Receipts, Newsletter, Notifications, Pending, or Review and archives immediately.
+ *
+ * @param {number} maxThreads Maximum number of inbox threads to process (default: 100)
+ */
+function triageHistoricalInbox(maxThreads) {
+  maxThreads = maxThreads || 100;
+  var apiKey = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
+  if (!apiKey) {
+    Logger.log('❌ TYPESAFE_API_KEY script property is not set.');
+    return;
+  }
+
+  var threads = GmailApp.search('in:inbox', 0, maxThreads);
+  Logger.log('📥 Historical triage initiated: ' + threads.length + ' inbox threads found');
+  if (threads.length === 0) {
+    Logger.log('Inbox is already empty. Zero-Inbox achieved!');
+    return;
+  }
+
+  var labelObjects = getOrCreateLabels();
+  var followUpLabel = labelObjects[CONFIG.labels.followUp];
+  var processed = 0;
+
+  for (var i = 0; i < threads.length; i++) {
+    var thread = threads[i];
+    var messages = thread.getMessages();
+    var latestMessage = messages[messages.length - 1];
+
+    // Strip any existing Follow Up label since it is a historical email
+    if (followUpLabel && threadHasLabel(thread, followUpLabel)) {
+      thread.removeLabel(followUpLabel);
+    }
+
+    // If it already has another valid category label, simply archive
+    var existingLabel = getExistingCategoryLabel(thread, labelObjects);
+    if (existingLabel) {
+      thread.moveToArchive();
+      processed++;
+      Logger.log('[' + processed + '/' + threads.length + '] Existing label archived: [' + existingLabel + '] ' + latestMessage.getSubject());
+      continue;
+    }
+
+    var emailData = {
+      sender: latestMessage.getFrom(),
+      subject: latestMessage.getSubject(),
+      snippet: latestMessage.getPlainBody().substring(0, 1000),
+      has_attachment: latestMessage.getAttachments().length > 0,
+    };
+
+    try {
+      var decision = callJevHistoricalTriage(emailData, apiKey);
+      var label = labelObjects[decision.targetLabel];
+      if (label) {
+        thread.addLabel(label);
+      }
+      // Never star past emails, archive immediately to reach Zero-Inbox
+      thread.moveToArchive();
+
+      processed++;
+      Logger.log('[' + processed + '/' + threads.length + '] Triaged & archived: [' + decision.targetLabel + '] ' + emailData.subject);
+    } catch (err) {
+      Logger.log('Error (' + emailData.subject + '): ' + err.toString());
+    }
+  }
+
+  Logger.log('🎉 Historical triage complete: ' + processed + ' emails organized & archived!');
+}
+
+/**
  * Calls TypeSafe Jev System One Model
  */
 function callJevTriage(emailData, apiKey) {
@@ -217,4 +289,85 @@ function hasAnySystemLabel(thread, labelObjects) {
     }
   }
   return false;
+}
+
+function threadHasLabel(thread, targetLabel) {
+  var labels = thread.getLabels();
+  for (var i = 0; i < labels.length; i++) {
+    if (labels[i].getName() === targetLabel.getName()) return true;
+  }
+  return false;
+}
+
+function getExistingCategoryLabel(thread, labelObjects) {
+  var labels = thread.getLabels();
+  for (var i = 0; i < labels.length; i++) {
+    var name = labels[i].getName();
+    if (
+      name === CONFIG.labels.pending ||
+      name === CONFIG.labels.receipts ||
+      name === CONFIG.labels.newsletter ||
+      name === CONFIG.labels.notifications ||
+      name === CONFIG.labels.review
+    ) {
+      return name;
+    }
+  }
+  return null;
+}
+
+/**
+ * Historical email Jev classification (no star, no follow-up)
+ */
+function callJevHistoricalTriage(emailData, apiKey) {
+  var payload = {
+    model: CONFIG.model,
+    state: {
+      email: emailData,
+    },
+    questions: {
+      bucket: {
+        type: 'choice',
+        instructions:
+          'Which category does this historical email belong to?',
+        criteria: {
+          pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
+          receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
+          newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
+          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security codes',
+        },
+      },
+    },
+  };
+
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'Bearer ' + apiKey,
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  };
+
+  var response = UrlFetchApp.fetch(CONFIG.typesafeEndpoint, options);
+  var json = JSON.parse(response.getContentText());
+
+  if (!json.answers || !json.answers.bucket) {
+    throw new Error('TypeSafe API Error: ' + response.getContentText());
+  }
+
+  var bucket = json.answers.bucket.choice;
+  var bucketConf = json.answers.bucket.confidence || 1.0;
+
+  if (bucketConf < CONFIG.thresholds.minConfidence) {
+    return { targetLabel: CONFIG.labels.review };
+  }
+
+  var targetLabel = CONFIG.labels.notifications;
+  if (bucket === 'pending') targetLabel = CONFIG.labels.pending;
+  else if (bucket === 'receipts') targetLabel = CONFIG.labels.receipts;
+  else if (bucket === 'newsletter') targetLabel = CONFIG.labels.newsletter;
+
+  return { targetLabel: targetLabel };
 }

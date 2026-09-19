@@ -91,7 +91,17 @@ Get your API key from the [TypeSafe AI Console](https://typesafe.ai).
    - Click **Allow**.
 5. You will see `✅ 24/7 자동 실행 트리거가 성공적으로 설치되었습니다. (주기: 5분)` in the execution log.
 
-🎉 **Done!** Google Cloud will now wake up every 5 minutes and triage your inbox automatically.
+### Step 5: (Optional) One-Time Historical Zero-Inbox Kickoff
+Have dozens or hundreds of old unorganized emails currently sitting in your Inbox?
+1. In the function dropdown, select **`triageHistoricalInbox`**.
+2. Click **Run**.
+3. **What happens**:
+   - Analyzes all backlog emails currently in your `INBOX`.
+   - Categorizes them into `Receipts`, `Newsletter`, `Notifications`, or `Pending`.
+   - **Crucial**: Because these are past emails, **neither Star (⭐) nor Follow Up** labels are applied.
+   - Archives all processed emails immediately, transforming your messy inbox into a pristine **Zero-Inbox**!
+
+🎉 **Done!** Google Cloud will now wake up every 5 minutes and triage new incoming emails automatically.
 
 ---
 

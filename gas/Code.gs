@@ -113,6 +113,78 @@ function autoTriageInbox() {
 }
 
 /**
+ * 과거 메일 전수 재분류 및 Zero-Inbox 아카이브 실행
+ * - 현재 받은편지함(INBOX)에 쌓여 있는 과거 메일을 순차적으로 재분류합니다.
+ * - 과거 메일이므로 Star(⭐)나 Follow Up 라벨은 일절 부여하지 않습니다.
+ * - 순수 카테고리(Receipts, Newsletter, Notifications, Pending, Review)로 분류 후 즉시 아카이브합니다.
+ *
+ * @param {number} maxThreads 처리할 최대 스레드 수 (기본값: 100)
+ */
+function triageHistoricalInbox(maxThreads) {
+  maxThreads = maxThreads || 100;
+  var apiKey = PropertiesService.getScriptProperties().getProperty('TYPESAFE_API_KEY');
+  if (!apiKey) {
+    Logger.log('❌ TYPESAFE_API_KEY 스크립트 속성이 설정되지 않았습니다.');
+    return;
+  }
+
+  var threads = GmailApp.search('in:inbox', 0, maxThreads);
+  Logger.log('📥 과거 메일 재분류 시작: 총 ' + threads.length + '개의 인박스 스레드 발견');
+  if (threads.length === 0) {
+    Logger.log('인박스에 메일이 없습니다. 이미 Zero-Inbox 상태입니다.');
+    return;
+  }
+
+  var labelObjects = getOrCreateLabels();
+  var followUpLabel = labelObjects[CONFIG.labels.followUp];
+  var processed = 0;
+
+  for (var i = 0; i < threads.length; i++) {
+    var thread = threads[i];
+    var messages = thread.getMessages();
+    var latestMessage = messages[messages.length - 1];
+
+    // 과거 메일이므로 기존에 붙어있던 Follow Up 라벨은 제거
+    if (followUpLabel && threadHasLabel(thread, followUpLabel)) {
+      thread.removeLabel(followUpLabel);
+    }
+
+    // 이미 다른 표준 카테고리 라벨이 붙어있는 과거 메일인 경우 즉시 아카이브만 진행
+    var existingLabel = getExistingCategoryLabel(thread, labelObjects);
+    if (existingLabel) {
+      thread.moveToArchive();
+      processed++;
+      Logger.log('[' + processed + '/' + threads.length + '] 기존 라벨 유지 및 아카이브: [' + existingLabel + '] ' + latestMessage.getSubject());
+      continue;
+    }
+
+    var emailData = {
+      sender: latestMessage.getFrom(),
+      subject: latestMessage.getSubject(),
+      snippet: latestMessage.getPlainBody().substring(0, 1000),
+      has_attachment: latestMessage.getAttachments().length > 0,
+    };
+
+    try {
+      var decision = callJevHistoricalTriage(emailData, apiKey);
+      var label = labelObjects[decision.targetLabel];
+      if (label) {
+        thread.addLabel(label);
+      }
+      // 과거 메일이므로 절대 별표(Star)를 달지 않고 즉시 아카이브
+      thread.moveToArchive();
+
+      processed++;
+      Logger.log('[' + processed + '/' + threads.length + '] 분류 및 아카이브 완료: [' + decision.targetLabel + '] ' + emailData.subject);
+    } catch (err) {
+      Logger.log('에러 발생 (' + emailData.subject + '): ' + err.toString());
+    }
+  }
+
+  Logger.log('🎉 과거 메일 총 ' + processed + '건 재분류 및 아카이브 완료! 인박스가 비워졌습니다.');
+}
+
+/**
  * TypeSafe Jev 모델 호출
  */
 function callJevTriage(emailData, apiKey) {
@@ -231,4 +303,85 @@ function hasAnySystemLabel(thread, labelObjects) {
     }
   }
   return false;
+}
+
+function threadHasLabel(thread, targetLabel) {
+  var labels = thread.getLabels();
+  for (var i = 0; i < labels.length; i++) {
+    if (labels[i].getName() === targetLabel.getName()) return true;
+  }
+  return false;
+}
+
+function getExistingCategoryLabel(thread, labelObjects) {
+  var labels = thread.getLabels();
+  for (var i = 0; i < labels.length; i++) {
+    var name = labels[i].getName();
+    if (
+      name === CONFIG.labels.pending ||
+      name === CONFIG.labels.receipts ||
+      name === CONFIG.labels.newsletter ||
+      name === CONFIG.labels.notifications ||
+      name === CONFIG.labels.review
+    ) {
+      return name;
+    }
+  }
+  return null;
+}
+
+/**
+ * 과거 메일 전용 Jev 판정 (Star/Follow-Up 제외, 카테고리 중심 분류)
+ */
+function callJevHistoricalTriage(emailData, apiKey) {
+  var payload = {
+    model: CONFIG.model,
+    state: {
+      email: emailData,
+    },
+    questions: {
+      bucket: {
+        type: 'choice',
+        instructions:
+          'Which category does this historical email belong to?',
+        criteria: {
+          pending: 'Awaiting reply, package delivery tracking, ticket response, or ongoing workflow resolution',
+          receipts: 'Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings',
+          newsletter: 'Editorial content, digests, blogs, product release updates, marketing promotions, Substack',
+          notifications: 'Automated service notices, GitHub/Jira mentions, password resets, social media pings, security codes',
+        },
+      },
+    },
+  };
+
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'Bearer ' + apiKey,
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  };
+
+  var response = UrlFetchApp.fetch(CONFIG.typesafeEndpoint, options);
+  var json = JSON.parse(response.getContentText());
+
+  if (!json.answers || !json.answers.bucket) {
+    throw new Error('TypeSafe API 응답 오류: ' + response.getContentText());
+  }
+
+  var bucket = json.answers.bucket.choice;
+  var bucketConf = json.answers.bucket.confidence || 1.0;
+
+  if (bucketConf < CONFIG.thresholds.minConfidence) {
+    return { targetLabel: CONFIG.labels.review };
+  }
+
+  var targetLabel = CONFIG.labels.notifications;
+  if (bucket === 'pending') targetLabel = CONFIG.labels.pending;
+  else if (bucket === 'receipts') targetLabel = CONFIG.labels.receipts;
+  else if (bucket === 'newsletter') targetLabel = CONFIG.labels.newsletter;
+
+  return { targetLabel: targetLabel };
 }

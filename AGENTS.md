@@ -178,6 +178,12 @@ Inform or assist the user with:
    - Save changes.
    *(Why: `jev-mail` uses the Star ⭐ mailbox as your high-priority queue, eliminating Google's noisy heuristic algorithms).*
 
+### Step 4: (Optional) Initial Backlog Triage (`triageHistoricalInbox`)
+If the user has existing unorganized emails in their `INBOX`:
+1. In Apps Script editor, run function `triageHistoricalInbox`.
+2. It will categorize all existing emails into `Receipts`, `Newsletter`, `Notifications`, or `Pending` and archive them without adding `Follow Up` or `Star` (⭐).
+3. This gives the user an instantaneous Zero-Inbox state.
+
 ---
 
 ## 6. Maintenance & Troubleshooting for Agents

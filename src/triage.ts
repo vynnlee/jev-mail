@@ -141,3 +141,119 @@ export function evaluateTriageDecision(
     reasoning: `보관 대상 분류 (${targetLabel}) -> 즉시 아카이브`,
   };
 }
+
+/**
+ * 과거 메일 전수 정리용 페이로드 빌더
+ * (Star/Follow-Up 제외, 순수 카테고리 분류 목적)
+ */
+export function buildHistoricalJevPayload(email: EmailItem) {
+  return {
+    model: CONFIG.typesafe.model,
+    state: {
+      email: {
+        sender: email.sender,
+        subject: email.subject,
+        snippet: email.snippet,
+        has_attachment: email.hasAttachment ?? false,
+      },
+    },
+    questions: {
+      bucket: {
+        type: 'choice',
+        instructions:
+          'Which category does this historical email primarily belong to?',
+        criteria: {
+          pending: {
+            what: "Awaiting another person's reply, package delivery tracking, support ticket response, or ongoing workflow resolution",
+            examples: [
+              "We received your inquiry and will respond soon",
+              "Your order has shipped and is on the way",
+            ],
+          },
+          receipts: {
+            what: "Financial receipts, payment confirmations, Stripe/bank alerts, subscription invoices, tickets, bookings",
+            examples: [
+              "Your receipt from Acme Inc",
+              "Payment confirmation for subscription",
+            ],
+          },
+          newsletter: {
+            what: "Editorial content, digests, blogs, product release updates, marketing promotions, Substack",
+            examples: [
+              "This week in Tech Digest",
+              "Introducing our new feature v2.0",
+            ],
+          },
+          notifications: {
+            what: "Automated service notices, GitHub/Jira mentions, password resets, social media pings, security verification codes",
+            examples: [
+              "Security alert: New login detected",
+              "[GitHub] Pull request #123 merged",
+            ],
+          },
+        },
+      },
+    },
+  };
+}
+
+/**
+ * 과거 메일 판정 평가:
+ * - Star: 무조건 false
+ * - Follow Up: 미부여
+ * - Archive: 무조건 true (인박스 정리)
+ */
+export function evaluateHistoricalTriageDecision(
+  email: EmailItem,
+  answers: {
+    bucket: { choice: string; confidence?: number };
+  }
+): TriageResult {
+  const bucketChoice = answers.bucket.choice;
+  const bucketConfidence = answers.bucket.confidence ?? 1.0;
+
+  if (bucketConfidence < CONFIG.thresholds.minConfidence) {
+    return {
+      emailId: email.id,
+      targetLabel: CONFIG.labels.review,
+      shouldStar: false,
+      shouldArchive: true,
+      actionType: 'ARCHIVE_LABEL',
+      requiresActionScore: 0,
+      isImportantScore: 0,
+      chosenBucket: bucketChoice,
+      confidence: bucketConfidence,
+      reasoning: `과거 메일 신뢰도 낮음 -> Review 라벨 후 아카이브`,
+    };
+  }
+
+  let targetLabel: string;
+  switch (bucketChoice) {
+    case 'pending':
+      targetLabel = CONFIG.labels.pending;
+      break;
+    case 'receipts':
+      targetLabel = CONFIG.labels.receipts;
+      break;
+    case 'newsletter':
+      targetLabel = CONFIG.labels.newsletter;
+      break;
+    case 'notifications':
+    default:
+      targetLabel = CONFIG.labels.notifications;
+      break;
+  }
+
+  return {
+    emailId: email.id,
+    targetLabel,
+    shouldStar: false,
+    shouldArchive: true,
+    actionType: 'ARCHIVE_LABEL',
+    requiresActionScore: 0,
+    isImportantScore: 0,
+    chosenBucket: bucketChoice,
+    confidence: bucketConfidence,
+    reasoning: `과거 메일 정리 (${targetLabel}) -> 아카이브`,
+  };
+}
