@@ -82,5 +82,53 @@
       "shouldStar": false,
       "shouldArchive": true
     }
+  },
+  {
+    "id": "mock_08",
+    "sender": "identity@accounts.example.com",
+    "subject": "Your one-time sign-in code",
+    "snippet": "Use 417208 to finish signing in. This code expires in 10 minutes. If you did not request this code, you can ignore this message and reset your password from your account settings.",
+    "hasAttachment": false,
+    "expected": {
+      "label": "Notifications",
+      "shouldStar": false,
+      "shouldArchive": true
+    }
+  },
+  {
+    "id": "mock_09",
+    "sender": "security@accounts.example.com",
+    "subject": "Suspicious sign-in blocked from a new device",
+    "snippet": "We blocked a sign-in from Bucharest on a new Windows device because it did not match your recent activity. Review the event and secure your account now if this was not you.",
+    "hasAttachment": false,
+    "expected": {
+      "label": "Follow Up",
+      "shouldStar": true,
+      "shouldArchive": false
+    }
+  },
+  {
+    "id": "mock_10",
+    "sender": "billing@cloud-services.com",
+    "subject": "Payment failed: update your billing method",
+    "snippet": "We could not charge your card for the monthly subscription. Update your billing method by 25 September to prevent service interruption.",
+    "hasAttachment": false,
+    "expected": {
+      "label": "Follow Up",
+      "shouldStar": false,
+      "shouldArchive": false
+    }
+  },
+  {
+    "id": "mock_11",
+    "sender": "accounts@service-auth.com",
+    "subject": "Password reset code",
+    "snippet": "Your password reset code is 903114. Enter it on the password reset page. This code expires in 15 minutes. If you did not request a password reset, no action is required.",
+    "hasAttachment": false,
+    "expected": {
+      "label": "Notifications",
+      "shouldStar": false,
+      "shouldArchive": true
+    }
   }
 ]

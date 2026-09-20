@@ -111,6 +111,36 @@ test('API errors cannot leak server error messages or credentials', async () => 
   });
 });
 
+test('disabled Apps Script user API yields a fixed actionable message', async () => {
+  const client = new GoogleClient(async () => 'access', (async () => new Response(JSON.stringify({
+    error: { status: 'PERMISSION_DENIED',
+      message: 'User has not enabled the Apps Script API. Enable it by visiting https://script.google.com/home/usersettings then retry. Private detail: hidden-secret' },
+  }), { status: 403 })) as typeof fetch);
+  await assert.rejects(client.createProject('Jev-Mail'), error => {
+    assert.match(String(error), /APPS_SCRIPT_API_DISABLED/);
+    assert.match(String(error), /https:\/\/script\.google\.com\/home\/usersettings/);
+    assert.doesNotMatch(String(error), /hidden-secret|Private detail/);
+    return true;
+  });
+});
+
+test('disabled Cloud APIs are mapped only for allowlisted services', async () => {
+  const failure = (service: string) => new Response(JSON.stringify({ error: {
+    status: 'PERMISSION_DENIED', message: 'hidden-secret',
+    details: [{ reason: 'SERVICE_DISABLED', metadata: { service } }],
+  } }), { status: 403 });
+  const script = new GoogleClient(async () => 'access', (async () => failure('script.googleapis.com')) as typeof fetch);
+  const gmail = new GoogleClient(async () => 'access', (async () => failure('gmail.googleapis.com')) as typeof fetch);
+  const unknown = new GoogleClient(async () => 'access', (async () => failure('private.googleapis.com')) as typeof fetch);
+  await assert.rejects(script.createProject('Jev-Mail'), /GOOGLE_CLOUD_SCRIPT_API_DISABLED.*console\.cloud\.google\.com/);
+  await assert.rejects(gmail.getAccountEmail(), /GOOGLE_CLOUD_GMAIL_API_DISABLED.*console\.cloud\.google\.com/);
+  await assert.rejects(unknown.createProject('Jev-Mail'), error => {
+    assert.match(String(error), /PERMISSION_DENIED/);
+    assert.doesNotMatch(String(error), /private\.googleapis|hidden-secret/);
+    return true;
+  });
+});
+
 test('deployment payloads and account identity use the expected APIs', async () => {
   const calls: Array<{ url: URL; init: RequestInit }> = [];
   const client = new GoogleClient(async () => 'access', (async (rawUrl: string, init: RequestInit) => {

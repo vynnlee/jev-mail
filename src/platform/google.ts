@@ -46,7 +46,13 @@ export interface ScriptDeployment {
 
 export class GoogleApiError extends Error {
   constructor(public readonly status: number, public readonly code: string) {
-    super(`Google API request failed (${status}, ${code}). Check authorization, API access, and project configuration.`);
+    const guidance: Record<string, string> = {
+      APPS_SCRIPT_API_DISABLED: 'Enable the Apps Script API at https://script.google.com/home/usersettings, wait a few minutes, then retry.',
+      GOOGLE_CLOUD_SCRIPT_API_DISABLED: 'Enable the Apps Script API in your Google Cloud project at https://console.cloud.google.com/apis/library/script.googleapis.com, wait a few minutes, then retry.',
+      GOOGLE_CLOUD_GMAIL_API_DISABLED: 'Enable the Gmail API in your Google Cloud project at https://console.cloud.google.com/apis/library/gmail.googleapis.com, wait a few minutes, then retry.',
+    };
+    super(guidance[code] ? `Google API request failed (${status}, ${code}). ${guidance[code]}` :
+      `Google API request failed (${status}, ${code}). Check authorization, API access, and project configuration.`);
     this.name = 'GoogleApiError';
   }
 }
@@ -54,6 +60,25 @@ export class GoogleApiError extends Error {
 function safeCode(value: unknown): string {
   if (typeof value !== 'string' || !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(value)) return 'UNKNOWN';
   return value;
+}
+
+function apiError(status: number, data: any): GoogleApiError {
+  const error = data?.error;
+  if (status === 403 && typeof error?.message === 'string' &&
+      error.message.startsWith('User has not enabled the Apps Script API.')) {
+    return new GoogleApiError(status, 'APPS_SCRIPT_API_DISABLED');
+  }
+  const details = Array.isArray(error?.details) ? error.details : [];
+  for (const detail of details) {
+    if (detail?.reason !== 'SERVICE_DISABLED') continue;
+    if (detail?.metadata?.service === 'script.googleapis.com') {
+      return new GoogleApiError(status, 'GOOGLE_CLOUD_SCRIPT_API_DISABLED');
+    }
+    if (detail?.metadata?.service === 'gmail.googleapis.com') {
+      return new GoogleApiError(status, 'GOOGLE_CLOUD_GMAIL_API_DISABLED');
+    }
+  }
+  return new GoogleApiError(status, safeCode(error?.status || error?.code));
 }
 
 async function readJson(response: Response): Promise<any> {
@@ -72,7 +97,7 @@ export class GoogleClient {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const data = await readJson(response);
-    if (!response.ok) throw new GoogleApiError(response.status, safeCode(data?.error?.status || data?.error?.code));
+    if (!response.ok) throw apiError(response.status, data);
     return data as T;
   }
 
@@ -85,7 +110,7 @@ export class GoogleClient {
       headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000),
     });
     const data = await readJson(response);
-    if (!response.ok) throw new GoogleApiError(response.status, safeCode(data?.error?.status || data?.error?.code));
+    if (!response.ok) throw apiError(response.status, data);
     if (typeof data.emailAddress !== 'string' || !data.emailAddress) throw new Error('Google account email was not returned.');
     return data.emailAddress;
   }

@@ -26,6 +26,9 @@ test('buildPayload includes only supplied context and all typed judgments', () =
   });
   assert.deepEqual(payload.questions.bucket.criteria.pending.examples, DEFAULT_CONFIG.categories[0].examples);
   assert.ok(payload.questions.bucket.criteria[REVIEW_BUCKET_KEY]);
+  assert.match(payload.questions.requires_action.instructions, /conditional/);
+  assert.match(payload.questions.requires_action.instructions, /confirmed incident/);
+  assert.match(payload.questions.requires_action.instructions, /direct question/);
 });
 
 test('action decisions retain mail and star only important messages', () => {
