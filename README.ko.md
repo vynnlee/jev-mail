@@ -1,213 +1,255 @@
-# Jev-Mail (한국어)
+# Jev-Mail
 
-> TypeSafe Jev System One 기반의 Gmail 24/7 자동 Zero-Inbox 분류기.
+> CLI로 설치하고 관리하는, GAS 기반으로 24시간 작동하는 Jev 모델 기반 Gmail 분류기
 
-[English](README.md) | [한국어](README.ko.md)
+[English](README.md)
 
-Jev-Mail은 Google Apps Script(GAS) 기반으로 구글 클라우드에서 상시 구동되는 자동 이메일 분류 시스템입니다. 컴퓨터 전원이 꺼져 있어도 5분마다 새 메일을 확인하고 분류, 라벨링, 아카이브를 수행합니다.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Engine: TypeSafe Jev](https://img.shields.io/badge/Engine-TypeSafe%20Jev-orange.svg)](https://typesafe.ai)
+[![Runtime: Google Apps Script](https://img.shields.io/badge/Runtime-Google%20Apps%20Script-green.svg)](https://script.google.com)
 
-느리고 비용이 많이 드는 일반 생성형 LLM 텍스트 프롬프트 대신, TypeSafe AI의 System One 모델(`Jev`)을 활용합니다. 단 한 번의 API 호출(250ms 이하)로 조치 필요 여부(`Noul`), 긴급도(`Noul`), 카테고리(`Choice`)를 병렬 확률로 판정합니다.
+Jev-Mail은 Gmail 받은편지함을 분류하는 CLI 도구입니다. CLI가 버전이 관리되는 Google Apps Script 워커를 업로드하고, 워커가 Google의 시간 트리거로 받은편지함을 주기적으로 확인합니다. 컴퓨터를 꺼도 Google Apps Script가 실행되며, TypeSafe Jev의 typed 판단을 바탕으로 라벨, 별표, 아카이브를 적용합니다.
 
----
+사용 흐름은 간단하게 유지합니다. 한 번 설치하고, 미리보기를 확인한 뒤, 워커를 활성화하면 일상적인 사용은 Gmail에서 이어집니다. 최초 기본 모드는 `label-only`입니다. 먼저 라벨만 적용해 결과를 확인한 다음 필요할 때 아카이브 모드를 켤 수 있습니다.
 
-## 아키텍처 개요
+Jev-Mail은 완벽한 분류 정확도, 제로 설정, 고정된 응답 시간을 보장하지 않습니다. Jev의 판단은 확률적이며, 실제 받은편지함에서 확인해야 합니다. `preview`와 `Review`는 안전장치입니다.
+
+## 동작 구조
 
 ```mermaid
 flowchart LR
-    Trigger["클라우드 시간 트리거\n(5분 주기 상시 실행)"] --> Worker["Google Apps Script\n(서버리스 실행 엔진)"]
-    Gmail["Gmail 수신함"] <-->|"미처리 메일 조회 및 상태 반영"| Worker
-    Worker <-->|"단일 병렬 추론 (250ms 이하)"| Jev["TypeSafe Jev API\n(System One 모델)"]
-    Worker --> Actions["자동 처리 조치:\n라벨 부여, 별표 지정, 아카이브"]
+    CLI["jev-mail CLI\n설치, 설정, 점검"] --> OAuth["Google OAuth\n사용자 계정"]
+    CLI --> AppsScript["Google Apps Script\n버전 관리 워커"]
+    AppsScript --> Gmail["Gmail 받은편지함"]
+    AppsScript --> Jev["TypeSafe Jev API"]
+    Jev --> AppsScript
 ```
 
----
+CLI는 상시 실행되는 데몬이 아니며, 사용자 컴퓨터를 켜둘 필요도 없습니다. 실제 분류는 Google Apps Script가 담당합니다. Google 실행 API는 이 작업에 필요한 설치형 시간 트리거를 대신 만들어주지 않으므로, 최초 설치 때 Apps Script 편집기에서 `installTrigger`를 한 번 실행해야 합니다.
 
-## 운영 모드
+워커는 발신자, 수신자, 제목, 최대 1,000자의 본문 일부와 필요한 경우 제한된 이전 문맥을 Jev에 전달합니다. 다음 세 가지 typed 판단을 요청합니다.
 
-Jev-Mail은 두 가지 운영 모드를 지원합니다:
+- `requires_action`: 수신자가 회신, 결정, 승인, 작업을 해야 하는지.
+- `is_important`: 조치가 필요한 메일에 별표를 붙일지.
+- `bucket`: 조치가 필요하지 않은 메일의 설정된 카테고리.
 
-```mermaid
-flowchart TD
-    Choice{"운영 모드 선택"}
-    Choice -->|"모드 1"| DefaultMode["기본 템플릿 모드\n(Zero-Config)"]
-    Choice -->|"모드 2"| CustomMode["사용자 정의 분류 모드\n(Custom Taxonomy)"]
+워커는 확률을 검증한 뒤 Gmail을 변경합니다. 조치 가능성이 모호하거나, 카테고리 신뢰도가 낮거나, 알 수 없는 카테고리이거나, 처리 중 대화가 바뀌거나, 아카이브 조건이 완전하지 않으면 받은편지함에 남겨 `Review`로 보냅니다.
 
-    DefaultMode --> DeployDefault["사전 빌드된 gas/Code.gs 사용\nApps Script에 즉시 배포"]
+## 필요한 것
 
-    CustomMode --> Config["taxonomy.config.json 편집\n사용자 카테고리 및 규칙 정의"]
-    Config --> Generate["명령어 실행: npm run generate\n맞춤형 GAS 스크립트 컴파일"]
-    Generate --> Simulate["명령어 실행: npm run simulate\n로컬 모의 테스트 검증"]
-    Simulate --> DeployCustom["컴파일된 Code.gs를 GAS에 배포"]
+- CLI 실행을 위한 Node.js 22 이상.
+- TypeSafe API 키.
+- Gmail을 사용하는 Google 계정.
+- Desktop OAuth 클라이언트를 보유하고 Apps Script API와 Gmail API가 활성화된 표준 Google Cloud 프로젝트.
+- [Google Apps Script 사용자 설정](https://script.google.com/home/usersettings)에서 Apps Script API 활성화.
 
-    DeployDefault --> Execution["24/7 클라우드 자동화 실행\n(상시 Zero-Inbox 유지)"]
-    DeployCustom --> Execution
+OAuth 동의 화면이 조직 전용(Internal)으로 제한되어 있으면 개인 Gmail 계정은 인증할 수 없습니다. 해당 조직의 Google Workspace 계정을 사용하거나, 동의 화면을 **External** 테스트로 설정하고 개인 계정을 테스트 사용자로 추가하십시오. 이 설정은 프로젝트 전체의 OAuth 클라이언트에 영향을 줄 수 있으므로 기존 클라이언트를 보존해야 한다면 Jev-Mail 전용 Cloud 프로젝트를 사용하는 편이 안전합니다. 자세한 내용은 Google의 [OAuth audience 안내](https://support.google.com/cloud/answer/15549945?hl=en)를 확인하십시오.
+
+`init`에 전달하는 프로젝트 번호는 다운로드한 Desktop OAuth 클라이언트를 소유한 같은 Google Cloud 프로젝트의 숫자형 프로젝트 번호여야 합니다. OAuth 인증이 시작된 뒤 CLI가 프로젝트 불일치를 자동으로 고칠 수는 없습니다.
+
+## 최초 설치
+
+최초 설치에는 브라우저 승인과 Google 편집기 작업이 포함됩니다. 이는 로컬 백그라운드 프로세스가 아니라 Google 플랫폼의 설치 방식입니다.
+
+### 1. Google Cloud 준비
+
+표준 Google Cloud 프로젝트를 만들거나 선택한 뒤 다음을 진행합니다.
+
+1. **Apps Script API**를 활성화합니다.
+2. **Gmail API**를 활성화합니다.
+3. OAuth 동의 화면을 설정하고, 테스트 모드라면 Jev-Mail을 사용할 Google 계정을 테스트 사용자로 추가합니다.
+4. **Desktop app** OAuth 클라이언트를 만들고 JSON 파일을 다운로드합니다.
+5. 프로젝트 세부정보에서 숫자형 **프로젝트 번호**를 복사합니다.
+
+OAuth JSON 파일은 로컬에 보관하고 커밋하거나 채팅에 붙여넣지 마십시오.
+
+### 2. CLI 시작
+
+저장소를 내려받은 뒤 실행합니다.
+
+```bash
+npm install
+npm run build
+node dist/cli/main.js init \
+  --credentials /absolute/path/to/client.json \
+  --project-number 123456789012
 ```
 
-1. **모드 1: 기본 템플릿 모드 (Zero-Config)**
-   - 철저히 검증된 MECE Zero-Inbox 기본 분류 체계(`Follow Up`, `Pending`, `Receipts`, `Newsletter`, `Notifications`, `Review`)를 사용합니다.
-   - [gas/Code.gs](gas/Code.gs) 파일의 코드를 복사하여 즉시 배포할 수 있으며 별도의 로컬 빌드 도구가 필요하지 않습니다.
+브라우저에서 분류할 Gmail 계정으로 로그인하고 권한을 승인합니다. CLI 로컬 상태는 기본적으로 `~/.config/jev-mail`에 저장됩니다. 계정이나 설치를 분리하려면 `--home DIR`을 사용하십시오.
 
-2. **모드 2: 사용자 정의 분류 모드 (Custom Taxonomy)**
-   - `taxonomy.config.json` 파일을 통해 본인만의 이메일 카테고리, 분류 기준, 라벨명, 예시 문장, 아카이브 여부를 자유롭게 설정할 수 있습니다.
-   - `npm run generate` 명령어로 맞춤형 Google Apps Script 코드와 TypeScript 설정 파일을 자동 생성합니다.
-   - 배포 전 `npm run simulate`를 통해 로컬 가상 메일 시뮬레이션 검증을 수행할 수 있습니다.
+CLI는 GAS 프로젝트를 만들고 워커와 YAML 설정을 업로드한 뒤 버전이 관리되는 실행 배포를 만듭니다. 새 GAS 프로젝트를 같은 Google Cloud 프로젝트에 연결해야 하면 그 지점에서 안내와 함께 멈춥니다.
 
----
+### 3. GAS 프로젝트 연결과 트리거 설치
 
-## 의사결정 파이프라인
+`init`이 출력한 링크를 따라 진행합니다.
 
-Jev-Mail은 메일의 수명 주기(Lifecycle)와 내용(Content)을 2축으로 분리하여 처리합니다.
+1. 새 Apps Script 프로젝트의 설정을 엽니다.
+2. **Google Cloud Platform project**에서 **Change project**를 선택합니다.
+3. `init`에 사용한 같은 숫자형 프로젝트 번호를 입력합니다.
+4. Apps Script 편집기로 돌아가 함수 선택기에서 `installTrigger`를 선택하고 한 번 실행합니다.
+5. Google의 권한 승인을 완료합니다.
 
-```mermaid
-flowchart TD
-    Start["수신 이메일 (INBOX)"] --> Inference["TypeSafe Jev 추론\n(병렬 질의: Noul + Choice)"]
+트리거는 일시 정지된 상태로 만들어집니다. `enable`을 실행하기 전에는 메일을 분류하지 않습니다. 이 편집기 작업은 Apps Script API가 설치형 트리거 생성 기능을 제공하지 않기 때문에 필요합니다.
 
-    Inference --> CheckAction{"requires_action >= 0.55?"}
+### 4. 설치 재개와 API 키 설정
 
-    CheckAction -- "예 (직접 조치 필요)" --> ActionPath["라벨 지정: Follow Up\n인박스(INBOX) 유지"]
-    ActionPath --> CheckUrgent{"is_important >= 0.70?"}
-    CheckUrgent -- "예" --> StarOn["별표(Star): ON\n(우선순위 큐)"]
-    CheckUrgent -- "아니오" --> StarOff["별표(Star): OFF"]
+같은 `init` 명령을 다시 실행합니다. CLI가 프로젝트 연결과 트리거를 확인한 뒤 TypeSafe 키를 마스킹된 입력으로 받습니다. 자동화 환경에서는 `init` 실행 전에 `TYPESAFE_API_KEY` 환경 변수를 설정할 수 있습니다. 키를 CLI 인자로 전달하지 마십시오.
 
-    CheckAction -- "아니오 (정보성/비액션)" --> CheckConfidence{"카테고리 신뢰도 >= 0.60?"}
+키는 인증된 Google 실행 API를 통해 워커의 Script Properties에 저장됩니다. 저장소에 기록되거나 CLI 출력에 표시되지 않습니다.
 
-    CheckConfidence -- "아니오 (신뢰도 부족)" --> ReviewPath["라벨 지정: Review\n인박스(INBOX) 보존 및 수동 검토"]
-    CheckConfidence -- "예" --> RouteCategory["카테고리 라벨 지정:\nReceipts, Newsletter, Notifications, Pending"]
-    RouteCategory --> ArchiveAction["즉시 아카이브\n(Zero-Inbox 달성)"]
+### 5. 미리보기와 활성화
+
+```bash
+node dist/cli/main.js preview --limit 10
+node dist/cli/main.js enable
+node dist/cli/main.js status
 ```
 
-### 기본 라벨 및 처리 기준
+`preview`는 Gmail을 변경하지 않고 Jev를 호출해 예상 결과를 보여줍니다. API 사용량은 발생합니다. 자동 분류를 활성화하기 전에 미리보기 결과를 확인하십시오.
 
-| 라벨명 | 대상 및 성격 | 판정 기준 | 별표 정책 | 인박스 보존 여부 |
-| :--- | :--- | :--- | :---: | :---: |
-| `Follow Up` | 직접 회신, 승인, 수동 작업이 필요한 업무 | 조치 필요 확률 0.55 이상 | 긴급 건(24시간 내)만 ON | 인박스 유지 |
-| `Pending` | 회신 대기, 배송 추적, 티켓 처리 대기 | 외부 결과 대기 중인 상태 | OFF | 즉시 아카이브 |
-| `Receipts` | 결제 영수증, 세금계산서, SaaS 인보이스 | 재무, 정산, 증빙 서류 | OFF | 즉시 아카이브 |
-| `Newsletter` | 기술 블로그, 아티클, 주간 다이제스트 | 지식 및 정보성 읽을거리 | OFF | 즉시 아카이브 |
-| `Notifications` | 깃허브 알림, CI/CD 빌드, 보안 인증번호, OTP | 기계 생성 시스템 알림 | OFF | 즉시 아카이브 |
-| `Review` | 모델 신뢰도가 0.60 미만인 경계 케이스 | 수동 확인 필요 건 | OFF | 인박스 유지 |
+정상적인 순서는 다음과 같습니다.
 
----
-
-## AI 코딩 에이전트를 통한 1-Shot 배포
-
-Claude Code, Antigravity, Cursor, Codex 등의 코딩 에이전트를 사용 중이라면 아래 프롬프트를 에이전트에게 전달하십시오:
-
-```markdown
-https://github.com/vynnlee/jev-mail 의 AGENTS.md 를 읽고 내 Gmail 계정에 Jev-Mail을 세팅해줘.
-
-보안 요구사항:
-내 TypeSafe API 키를 이 채팅창에 직접 입력하게 하지 마라.
-대신 터미널을 통한 안전한 대화형 입력(read -s 등)을 요청하거나, Google Apps Script 프로젝트 설정의 스크립트 속성에 직접 입력하도록 안내해라.
-
-배포 모드 선택:
-- 모드 1 (기본 템플릿): 표준 Zero-Inbox 분류 체계(Follow Up, Pending, Receipts, Newsletter, Notifications, Review) 배포.
-- 모드 2 (맞춤형 분류): 내게 필요한 이메일 분류 항목을 질문하고 taxonomy.config.json을 생성한 뒤 컴파일하여 배포.
-
-AGENTS.md에 정의된 절차를 단계별로 따라 진행해줘.
+```text
+init -> GAS 프로젝트 연결 -> installTrigger 실행 -> init 재실행 -> preview -> enable
 ```
 
-에이전트가 [AGENTS.md](AGENTS.md)를 읽고 API 키 유출 없이 전체 설치를 안전하게 완료합니다.
+## CLI 명령
 
----
+패키지로 설치하면 `jev-mail` 명령을 사용할 수 있습니다. 저장소에서는 위 예시처럼 `node dist/cli/main.js`를 사용합니다.
 
-## 3분 수동 설치 가이드
+| 명령 | 용도 |
+| --- | --- |
+| `init` | Google 인증, GAS 프로젝트 생성, 코드 업로드, 배포, 키 설정을 재개 가능하게 수행 |
+| `preview --limit N` | Gmail을 변경하지 않고 받은편지함 최대 20개 스레드 분류 |
+| `enable` | 예약된 분류 재개 |
+| `disable` | 트리거를 유지하면서 예약 분류 일시 정지 |
+| `status` | 실제 원격 트리거, 활성 상태, 계정, 최근 실행 확인 |
+| `doctor` | 로컬 설정과 원격 설치 점검 |
+| `update` | 현재 워커 버전을 기존 GAS 배포에 업로드 |
+| `config init` | 기본 YAML 설정 생성 |
+| `config show` | 검증된 YAML 설정 출력 |
+| `config validate` | 적용하지 않고 YAML 검증 |
+| `config migrate --from OLD --config NEW` | 기존 JSON taxonomy를 새 label-only YAML로 변환하고 기존 파일은 덮어쓰지 않음 |
+| `config edit` | 라벨과 카테고리 규칙을 대화형으로 변경 |
+| `config apply` | 현재 YAML 정책을 업로드. 설정 변경만으로 기존 메일을 일괄 재분류하지 않음 |
+| `config set-mode --mode label-only\|archive` | 아카이브 허용 모드 선택 |
 
-### 1단계: TypeSafe API 키 발급
-[TypeSafe AI 콘솔](https://typesafe.ai)에서 API 키를 발급받습니다.
+주요 옵션:
 
-### 2단계: Google Apps Script 프로젝트 생성
-1. [script.google.com/home](https://script.google.com/home)에 접속하여 **새 프로젝트**를 생성합니다.
-2. 프로젝트 이름을 `Jev-Mail-Triage`로 변경합니다.
-3. `Code.gs` 내용을 [gas/Code.gs](gas/Code.gs) 또는 한국어 라벨용 [templates/Code-korean.gs](templates/Code-korean.gs)의 코드로 교체합니다.
-4. 저장(`Cmd+S` 또는 `Ctrl+S`)합니다.
+```text
+--home DIR       별도의 로컬 설치 디렉터리
+--config FILE    기본 경로 대신 사용할 YAML 파일
+--json           자동화를 위한 JSON 출력, 대화형 입력 비활성화
+--replace-key    init에서 TypeSafe 키를 synthetic 검증 후 교체
+--reauthorize    인증이 만료되거나 철회된 뒤 init에서 Google 재연결
+--no-open        브라우저를 열지 않고 링크만 출력
+```
 
-### 3단계: 스크립트 속성에 API 키 추가
-1. 좌측 메뉴에서 **프로젝트 설정**(톱니바퀴 아이콘)을 클릭합니다.
-2. 하단 **스크립트 속성**에서 **스크립트 속성 추가**를 누릅니다.
-3. 다음 값을 입력합니다:
-   - 속성: `TYPESAFE_API_KEY`
-   - 값: `<발급받은_API_키>`
-4. **스크립트 속성 저장**을 클릭합니다.
+종료 코드는 자동화에서 사용할 수 있습니다. `0` 성공, `1` 예상하지 못한 오류, `2` 잘못된 사용법 또는 설정, `3` 인증 또는 Google 설정 필요, `4` 원격 실행 오류입니다.
 
-### 4단계: 24/7 자동 실행 트리거 설치
-1. 좌측 메뉴에서 **편집기**(`< >` 아이콘)로 돌아옵니다.
-2. 상단 툴바 함수 드롭다운에서 `installTrigger`를 선택합니다.
-3. **실행**을 누릅니다.
-4. Google 계정 권한 승인 창이 뜨면 권한을 허용합니다.
-5. 실행 로그에 `[OK] 24/7 trigger installed successfully`가 출력되면 정상 완료입니다. 이제 5분마다 백그라운드에서 자동 분류가 실행됩니다.
+## YAML 설정
 
-### 5단계: (선택 사항) 받은편지함 기존 메일 일괄 정리
-현재 `INBOX`에 쌓여 있는 과거 메일들을 한 번에 정리하려면:
-1. 함수 드롭다운에서 `triageHistoricalInbox`를 선택합니다.
-2. **실행**을 누릅니다.
-3. 모든 기존 메일이 카테고리별로 분류되고 즉시 아카이브됩니다. (과거 메일에는 별표나 Follow Up 라벨이 부여되지 않습니다.)
+Jev-Mail은 YAML을 사용합니다. 전체 예시는 [jev-mail.example.yaml](jev-mail.example.yaml)에 있습니다.
 
----
+```yaml
+version: 1
+model: jev-latest
 
-## 맞춤형 분류 체계 커스텀 (모드 2)
+labels:
+  action: Follow Up
+  review: Review
 
-나만의 이메일 카테고리와 분류 규칙을 적용하는 방법:
+thresholds:
+  actionRequired: 0.55
+  actionNotRequired: 0.2
+  important: 0.7
+  categoryConfidence: 0.6
 
-1. `taxonomy.config.json` 파일을 수정합니다:
-   ```json
-   {
-     "action_label": "Follow Up",
-     "review_label": "Review",
-     "thresholds": {
-       "requires_action": 0.55,
-       "is_important": 0.70,
-       "min_confidence": 0.60
-     },
-     "categories": [
-       {
-         "key": "finance",
-         "label": "정산 및 영수증",
-         "archive": true,
-         "description": "세금계산서, 결제 영수증, 은행 알림, 정산 내역",
-         "examples": ["전자세금계산서 발행 완료", "카드 승인 내역"]
-       },
-       {
-         "key": "team",
-         "label": "사내 알림",
-         "archive": true,
-         "description": "지라 티켓 업데이트, 슬랙 알림, 사내 공지",
-         "examples": ["[Jira] 이슈 할당됨", "신규 공지사항"]
-       }
-     ]
-   }
-   ```
+categories:
+  - key: finance
+    label: Finance
+    description: 인보이스, 결제 확인, 회계 관련 알림
+    examples:
+      - 구독 결제가 확인되었습니다
+    archive: true
 
-2. 맞춤형 Apps Script 코드 및 설정을 컴파일합니다:
-   ```bash
-   npm run generate
-   ```
+runtime:
+  batchSize: 10
+  maxScan: 100
+  maxRuntimeSeconds: 240
+  mode: label-only
+  intervalMinutes: 5
+```
 
-3. 가상 시뮬레이션으로 검증합니다:
-   ```bash
-   TYPESAFE_API_KEY="your-api-key" npm run simulate
-   ```
+주요 규칙:
 
-4. 생성된 [gas/Code.gs](gas/Code.gs) 코드를 Google Apps Script 프로젝트에 붙여넣습니다.
+- `actionRequired`는 `actionNotRequired`보다 커야 합니다.
+- 조치 확률이 `actionRequired` 이상이면 action 라벨을 붙이고 인박스에 남깁니다. `important` 이상이면 별표를 붙입니다.
+- 두 조치 임계값 사이의 확률은 모호한 것으로 보고 `Review`에 남깁니다.
+- `actionNotRequired`보다 낮으면 Jev의 카테고리와 신뢰도를 사용합니다. 신뢰도가 낮거나 카테고리를 알 수 없으면 `Review`에 남깁니다.
+- `label-only` 모드에서는 카테고리 라벨만 붙이고 아카이브하지 않습니다. `archive` 모드에서 카테고리의 `archive: true`가 아카이브를 허용합니다.
+- action, Review, 카테고리 라벨은 서로 달라야 하며 `INBOX`, `SPAM`, `TRASH`, `STARRED` 같은 Gmail 시스템 라벨을 사용할 수 없습니다.
+- 카테고리 키는 소문자, 숫자, 하이픈, 밑줄만 사용합니다. 알 수 없는 YAML 속성과 안전하지 않은 값은 업로드 전에 거절됩니다.
 
----
+사용자 정의 파일을 계속 사용하려면 모든 명령에 `--config`를 전달합니다.
 
-## 권장 Gmail 환경설정
+```bash
+node dist/cli/main.js config validate --config ./jev-mail.yaml
+node dist/cli/main.js init --config ./jev-mail.yaml --credentials /absolute/path/to/client.json --project-number 123456789012
+node dist/cli/main.js config apply --config ./jev-mail.yaml
+```
 
-Google의 기본 중요도 마커는 뉴스레터나 시스템 알림을 자주 오분류합니다.
+기존 `taxonomy.config.json`은 현재 CLI가 직접 읽지 않습니다. 다음 명령으로 새 YAML로 변환하십시오.
 
-1. Gmail 설정(톱니바퀴) -> **모든 설정 보기** -> **받은편지함**.
-2. **중요도 표시** 항목에서 **마커 표시 안함**을 선택합니다.
-3. **내 이전 작업을 사용하여 중요도를 예측하지 않음**을 선택합니다.
-4. 변경사항을 저장합니다.
+```bash
+node dist/cli/main.js config migrate \
+  --from ./taxonomy.config.json \
+  --config ./jev-mail.yaml
+node dist/cli/main.js config validate --config ./jev-mail.yaml
+```
 
-Jev-Mail은 중요도 판정 점수(`is_important >= 0.70`)가 높은 긴급 업무 메일에만 **별표(Star)**를 부여하여, 별표편지함을 직관적인 데일리 우선순위 큐로 활용합니다.
+마이그레이션은 기존 출력 파일을 덮어쓰지 않으며 안전한 `label-only` 모드로 저장합니다. 생성된 YAML을 확인한 뒤 기존 아카이브 동작을 의도적으로 유지할 때만 `config set-mode --mode archive`를 사용하십시오.
 
----
+설정을 바꾸면 워커가 사용하는 정책 fingerprint가 바뀝니다. 설정 변경만으로 기존 메일을 다시 분류하지는 않으며, 새 답장이나 이전에 처리되지 않은 메일에 현재 정책을 사용합니다.
 
-## 보안 및 개인정보 보호
+## 운영 안전장치
 
-- 이메일 데이터 무저장: 어떤 외부 데이터베이스에도 이메일 본문이나 메타데이터를 저장하지 않습니다.
-- 개인 계정의 안전한 구글 클라우드 컨테이너(Google Apps Script) 내에서만 실행됩니다.
-- API 키는 구글 스크립트 속성에 암호화되어 보관됩니다. 채팅 프롬프트에 API 키를 노출하지 마십시오.
-- TypeSafe AI 추론 호출 시에만 발신자, 제목, 본문 일부(최대 1,000자)가 암호화된 TLS 통신으로 전달됩니다.
+워커는 GAS 스크립트 잠금으로 겹치는 실행을 막습니다. 처리한 스레드의 상태를 제한된 receipt로 기록해 완료된 메시지를 반복해서 Jev에 보내지 않으며, 새 답장이 오면 다시 평가합니다. 라벨이나 아카이브를 적용하기 직전에 Gmail 상태를 다시 확인합니다. 하나의 스레드에 여러 받은편지함 메시지가 있으면 평가하지 않은 메시지까지 아카이브하지 않고 `Review`로 남깁니다. receipt 용량은 유한하며, 한도에 도달하면 중복 분류를 피하기 위해 새 receipt 생성을 중단하고 `status`에 용량 상태를 표시합니다.
+
+실패 시 제한된 재시도 backoff를 사용하며, 추론이 실패한 경우 Gmail 변경을 적용하지 않습니다. `disable`은 트리거를 삭제하지 않고 워커를 멈추므로 점검 후 재개할 수 있습니다.
+
+처음에는 label-only 모드를 사용하십시오. 대표적인 메일의 preview 결과를 확인하고 분류 체계를 조정한 뒤 archive 모드를 선택하는 것이 안전합니다.
+
+## 개인정보와 자격 증명
+
+- CLI는 OAuth 클라이언트 메타데이터, refresh token, 설치 상태, YAML 설정을 기본 로컬 디렉터리에 저장합니다. 파일 권한은 제한적으로 생성되지만 운영체제 계정의 파일 보호도 필요합니다.
+- TypeSafe 키는 GAS Script Properties에 저장하며 커밋하지 않습니다. 마스킹된 `init` 입력 또는 `TYPESAFE_API_KEY`를 사용하고 CLI 옵션으로 전달하지 마십시오.
+- 워커는 분류를 위해 발신자, 수신자, 제목, 최대 1,000자의 본문 일부와 제한된 이전 문맥을 HTTPS로 TypeSafe API에 전송합니다. 민감한 메일을 사용하기 전 TypeSafe의 현재 약관과 보관 정책을 확인하십시오.
+- 외부 데이터베이스는 사용하지 않습니다. GAS Script Properties에는 제한된 처리 receipt와 정책 fingerprint, 재시도 상태, 최근 실행 메타데이터가 남습니다. 임시 대기 및 실패 receipt는 약 180일 후 정리되며, 받은편지함에 남은 완료 receipt는 정책 변경 뒤 재분류를 막기 위해 유지됩니다. 아카이브된 스레드의 receipt는 약 1,200개 한도에 가까워지면 정리됩니다. 한도에 도달하면 새 receipt 생성이 중단되고 `status`에 상태가 표시됩니다. receipt에는 본문이 들어가지 않습니다.
+- 오류 로그에는 운영 오류가 기록될 수 있습니다. 모든 규제 또는 조직 환경에 적합하다고 가정하지 마십시오.
+
+## 개발
+
+```bash
+npm install
+npm run typecheck
+npm test
+npm run build
+npm run test:e2e
+```
+
+실제 TypeSafe 연결을 synthetic fixture로만 확인하려면 다음을 실행할 수 있습니다.
+
+```bash
+npm run simulate
+```
+
+환경 변수 또는 gitignore된 `.env` 파일에 `TYPESAFE_API_KEY`가 필요합니다. Gmail에는 접근하지 않으며, production 정확도를 증명하는 테스트가 아닙니다.
+
+테스트에는 순수 core/config 테스트, GAS 워커 하네스, Google API와 OAuth 테스트, CLI 및 E2E 테스트가 포함됩니다. 테스트는 fixture와 mock을 사용하므로 실제 Gmail, Google Cloud 프로젝트, TypeSafe 계정의 연결 성공을 증명하지는 않습니다.
+
+자세한 설치 체크리스트는 [docs/onboarding.md](docs/onboarding.md), 저장소 작업 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 확인하십시오.
+
+## 라이선스
+
+MIT. [LICENSE](LICENSE)를 참조하십시오.

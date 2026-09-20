@@ -1,19 +1,46 @@
 {
   "name": "jev-mail",
-  "version": "0.1.0",
-  "description": "TypeSafe AI Jev-powered Zero-Inbox email triage automation",
+  "version": "0.2.0",
+  "description": "CLI-managed, always-on Gmail classification with Jev and Google Apps Script",
   "type": "module",
   "scripts": {
-    "generate": "node scripts/generate.js",
-    "build": "node scripts/generate.js && tsc",
-    "simulate": "node scripts/generate.js && tsc && node dist/cli.js",
-    "test": "npm run simulate"
+    "build": "node scripts/build.mjs",
+    "generate": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/**/*.test.ts",
+    "test:e2e": "npm run build && node --test tests/e2e/*.test.mjs",
+    "simulate": "tsx src/simulate.ts",
+    "prepack": "npm run build"
   },
-  "keywords": ["typesafe", "jev", "gmail", "inbox-zero", "system-one"],
+  "keywords": [
+    "typesafe",
+    "jev",
+    "gmail",
+    "inbox-zero",
+    "system-one"
+  ],
   "author": "Vynn Lee",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.20.0"
+  },
+  "bin": {
+    "jev-mail": "dist/cli/main.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.ko.md",
+    "LICENSE",
+    "jev-mail.example.yaml"
+  ],
+  "dependencies": {
+    "yaml": "^2.8.1"
   }
 }

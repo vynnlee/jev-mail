@@ -1,0 +1,50 @@
+version: 1
+model: jev-latest
+
+labels:
+  action: Follow Up
+  review: Review
+
+thresholds:
+  actionRequired: 0.55
+  actionNotRequired: 0.2
+  important: 0.7
+  categoryConfidence: 0.6
+
+categories:
+  - key: pending
+    label: Pending
+    description: Awaiting a reply, package delivery, ticket response, or another external outcome
+    examples:
+      - We received your inquiry and will respond soon
+      - Your order has shipped and is on the way
+    archive: true
+  - key: receipts
+    label: Receipts
+    description: Financial receipts, payment confirmations, invoices, tickets, bookings, and subscription notices
+    examples:
+      - Your receipt from Acme Inc
+      - Payment confirmation for subscription
+    archive: true
+  - key: newsletter
+    label: Newsletter
+    description: Editorial content, digests, blogs, product updates, and marketing promotions
+    examples:
+      - This week in Tech Digest
+      - Introducing our new feature v2.0
+    archive: true
+  - key: notifications
+    label: Notifications
+    description: Automated service notices, verification codes, password resets, security alerts, and repository activity
+    examples:
+      - Your verification code is 582914
+      - Security alert: New login detected
+      - '[GitHub] Pull request #123 merged'
+    archive: true
+
+runtime:
+  batchSize: 10
+  maxScan: 100
+  maxRuntimeSeconds: 240
+  mode: label-only
+  intervalMinutes: 5

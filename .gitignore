@@ -3,3 +3,12 @@ dist/
 .DS_Store
 *.log
 .env
+
+# Local Jev-Mail onboarding state and credentials
+google-client.json
+google-tokens.json
+installation.json
+.cli-lock/
+jev-mail.yaml
+*.credentials.json
+*.oauth.json

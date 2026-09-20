@@ -1,0 +1,11 @@
+import { build } from 'esbuild';
+import fs from 'node:fs/promises';
+const pkg = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8'));
+await fs.rm('dist', { recursive: true, force: true });
+await fs.mkdir('dist/gas', { recursive: true });
+await build({ entryPoints: ['src/cli/main.ts'], outfile: 'dist/cli/main.js', bundle: true, platform: 'node', packages: 'external', format: 'esm', target: 'node22', banner: { js: '#!/usr/bin/env node' }, define: { __VERSION__: JSON.stringify(pkg.version) } });
+await fs.chmod('dist/cli/main.js', 0o755);
+const names = ['autoTriageInbox', 'installTrigger', 'disableTrigger', 'previewInbox', 'status', 'verifySetup', 'configure', 'setEnabled'];
+await build({ entryPoints: ['src/gas/worker.ts'], outfile: 'dist/gas/Code.gs', bundle: true, platform: 'neutral', format: 'iife', globalName: 'JevMail', target: 'es2019', banner: { js: '// Managed by jev-mail CLI. jev-mail-owner:v2' }, footer: { js: names.map(name => `function ${name}() { return JevMail.${name}.apply(null, arguments); }`).join('\n') } });
+await fs.writeFile('dist/gas/appsscript.json', JSON.stringify({ timeZone: 'Etc/UTC', runtimeVersion: 'V8', exceptionLogging: 'STACKDRIVER', executionApi: { access: 'MYSELF' }, oauthScopes: ['https://mail.google.com/', 'https://www.googleapis.com/auth/script.external_request', 'https://www.googleapis.com/auth/script.scriptapp'] }, null, 2) + '\n');
+console.log(`Built jev-mail ${pkg.version}: CLI + GAS bundle`);
