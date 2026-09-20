@@ -4,7 +4,8 @@
 
 [한국어 문서](README.ko.md)
 
-For guided installation by a coding agent, use the packaged [Jev-Mail setup skill](skills/jev-mail-setup/SKILL.md) and the [step-by-step onboarding guide](docs/onboarding.md). The installation uses your own Google Cloud project and Desktop OAuth client. You complete Google sign-in, consent, and the Apps Script editor approval; an authorized agent can help with Cloud project setup and resume the CLI after each handoff.
+> [!IMPORTANT]
+> For guided installation by a coding agent, use the packaged [Jev-Mail setup skill](skills/jev-mail-setup/SKILL.md) and the [step-by-step onboarding guide](docs/onboarding.md). The installation uses your own Google Cloud project and Desktop OAuth client. You complete Google sign-in, consent, and the Apps Script editor approval; an authorized agent can help with Cloud project setup and resume the CLI after each handoff.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Engine: TypeSafe Jev](https://img.shields.io/badge/Engine-TypeSafe%20Jev-orange.svg)](https://typesafe.ai)
