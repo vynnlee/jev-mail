@@ -1,0 +1,184 @@
+{
+  "date": "2026-09-20",
+  "model": "jev-latest",
+  "dataset": "examples/mock-emails.json",
+  "results": [
+    {
+      "id": "mock_01",
+      "passed": true,
+      "expected": {
+        "label": "Follow Up",
+        "shouldStar": true,
+        "shouldArchive": false
+      },
+      "result": {
+        "targetLabel": "Follow Up",
+        "shouldStar": true,
+        "shouldArchive": false,
+        "reason": "Action required and important; kept in Inbox and starred"
+      }
+    },
+    {
+      "id": "mock_02",
+      "passed": true,
+      "expected": {
+        "label": "Follow Up",
+        "shouldStar": false,
+        "shouldArchive": false
+      },
+      "result": {
+        "targetLabel": "Follow Up",
+        "shouldStar": false,
+        "shouldArchive": false,
+        "reason": "Action required; kept in Inbox"
+      }
+    },
+    {
+      "id": "mock_03",
+      "passed": true,
+      "expected": {
+        "label": "Pending",
+        "shouldStar": false,
+        "shouldArchive": true
+      },
+      "result": {
+        "targetLabel": "Pending",
+        "shouldStar": false,
+        "shouldArchive": true,
+        "reason": "Classified as Pending and archived"
+      }
+    },
+    {
+      "id": "mock_04",
+      "passed": true,
+      "expected": {
+        "label": "Receipts",
+        "shouldStar": false,
+        "shouldArchive": true
+      },
+      "result": {
+        "targetLabel": "Receipts",
+        "shouldStar": false,
+        "shouldArchive": true,
+        "reason": "Classified as Receipts and archived"
+      }
+    },
+    {
+      "id": "mock_05",
+      "passed": true,
+      "expected": {
+        "label": "Newsletter",
+        "shouldStar": false,
+        "shouldArchive": true
+      },
+      "result": {
+        "targetLabel": "Newsletter",
+        "shouldStar": false,
+        "shouldArchive": true,
+        "reason": "Classified as Newsletter and archived"
+      }
+    },
+    {
+      "id": "mock_06",
+      "passed": true,
+      "expected": {
+        "label": "Notifications",
+        "shouldStar": false,
+        "shouldArchive": true
+      },
+      "result": {
+        "targetLabel": "Notifications",
+        "shouldStar": false,
+        "shouldArchive": true,
+        "reason": "Classified as Notifications and archived"
+      }
+    },
+    {
+      "id": "mock_07",
+      "passed": true,
+      "expected": {
+        "label": "Notifications",
+        "shouldStar": false,
+        "shouldArchive": true
+      },
+      "result": {
+        "targetLabel": "Notifications",
+        "shouldStar": false,
+        "shouldArchive": true,
+        "reason": "Classified as Notifications and archived"
+      }
+    },
+    {
+      "id": "mock_08",
+      "passed": true,
+      "expected": {
+        "label": "Notifications",
+        "shouldStar": false,
+        "shouldArchive": true
+      },
+      "result": {
+        "targetLabel": "Notifications",
+        "shouldStar": false,
+        "shouldArchive": true,
+        "reason": "Classified as Notifications and archived"
+      }
+    },
+    {
+      "id": "mock_09",
+      "passed": true,
+      "expected": {
+        "label": "Follow Up",
+        "shouldStar": true,
+        "shouldArchive": false
+      },
+      "result": {
+        "targetLabel": "Follow Up",
+        "shouldStar": true,
+        "shouldArchive": false,
+        "reason": "Action required and important; kept in Inbox and starred"
+      }
+    },
+    {
+      "id": "mock_10",
+      "passed": false,
+      "expected": {
+        "label": "Follow Up",
+        "shouldStar": false,
+        "shouldArchive": false
+      },
+      "result": {
+        "targetLabel": "Follow Up",
+        "shouldStar": true,
+        "shouldArchive": false,
+        "reason": "Action required and important; kept in Inbox and starred"
+      }
+    },
+    {
+      "id": "mock_11",
+      "passed": true,
+      "expected": {
+        "label": "Notifications",
+        "shouldStar": false,
+        "shouldArchive": true
+      },
+      "result": {
+        "targetLabel": "Notifications",
+        "shouldStar": false,
+        "shouldArchive": true,
+        "reason": "Classified as Notifications and archived"
+      }
+    },
+    {
+      "passed": 10,
+      "total": 11,
+      "labelMatches": 11,
+      "archiveMatches": 11,
+      "starMatches": 10,
+      "safeAbstentions": 0,
+      "unexpectedArchives": 0,
+      "requestFailures": 0,
+      "scope": "synthetic fixtures; not production accuracy"
+    }
+  ],
+  "limitation": "Small synthetic development set; not an independent production accuracy estimate."
+}

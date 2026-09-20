@@ -1,0 +1,22 @@
+{
+  "date": "2026-09-20",
+  "executionSource": "Google Apps Script time-driven trigger",
+  "scheduledRun": {
+    "scanned": 1,
+    "failures": 0,
+    "at": "2026-09-20T11:06:56.025Z",
+    "handled": 1
+  },
+  "triggerCount": 1,
+  "receiptCount": 1,
+  "gmailAssertions": {
+    "fixtureExists": true,
+    "inInbox": true,
+    "expectedLabelPresent": true
+  },
+  "cleanup": "Synthetic fixture moved to Trash; worker paused; label-only mode, batch size 10, five-minute trigger retained.",
+  "limitations": [
+    "One scheduled live processing run verified; no 24-hour endurance test performed.",
+    "Synthetic model evaluation is a development set, not production accuracy."
+  ]
+}

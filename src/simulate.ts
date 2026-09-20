@@ -10,6 +10,7 @@ const fixtures = JSON.parse(await fs.readFile(new URL('../examples/mock-emails.j
 const config = structuredClone(DEFAULT_CONFIG);
 config.runtime.mode = 'archive';
 let passed = 0;
+let labelMatches = 0, archiveMatches = 0, starMatches = 0, safeAbstentions = 0, unexpectedArchives = 0, requestFailures = 0;
 for (const fixture of fixtures) {
   try {
     const response = await fetch('https://api.typesafe.ai/v1/systemone', {
@@ -21,10 +22,16 @@ for (const fixture of fixtures) {
     const result = decide(data.answers, config);
     const ok = result.targetLabel === fixture.expected.label && result.shouldStar === fixture.expected.shouldStar && result.shouldArchive === fixture.expected.shouldArchive;
     if (ok) passed++;
+    if (result.targetLabel === fixture.expected.label) labelMatches++;
+    if (result.shouldArchive === fixture.expected.shouldArchive) archiveMatches++;
+    if (result.shouldStar === fixture.expected.shouldStar) starMatches++;
+    if (result.targetLabel === config.labels.review && fixture.expected.label !== config.labels.review) safeAbstentions++;
+    if (result.shouldArchive && !fixture.expected.shouldArchive) unexpectedArchives++;
     console.log(JSON.stringify({ id: fixture.id, passed: ok, expected: fixture.expected, result }));
   } catch (error) {
+    requestFailures++;
     console.error(JSON.stringify({ id: fixture.id, passed: false, error: 'Model request failed; check credentials and connectivity.' }));
   }
 }
-console.log(JSON.stringify({ passed, total: fixtures.length, scope: 'synthetic fixtures; not production accuracy' }));
+console.log(JSON.stringify({ passed, total: fixtures.length, labelMatches, archiveMatches, starMatches, safeAbstentions, unexpectedArchives, requestFailures, scope: 'synthetic fixtures; not production accuracy' }));
 if (passed !== fixtures.length) process.exitCode = 1;
