@@ -2,15 +2,15 @@
 
 > CLI-installed and CLI-managed Gmail classification that runs continuously on Google Apps Script with the TypeSafe Jev model.
 
-[한국어 문서](README.ko.md)
-
-> [!IMPORTANT]
-> For guided installation by a coding agent, use the packaged [Jev-Mail setup skill](skills/jev-mail-setup/SKILL.md) and the [step-by-step onboarding guide](docs/onboarding.md). The installation uses your own Google Cloud project and Desktop OAuth client. You complete Google sign-in, consent, and the Apps Script editor approval; an authorized agent can help with Cloud project setup and resume the CLI after each handoff.
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Engine: TypeSafe Jev](https://img.shields.io/badge/Engine-TypeSafe%20Jev-orange.svg)](https://typesafe.ai)
 [![Runtime: Google Apps Script](https://img.shields.io/badge/Runtime-Google%20Apps%20Script-green.svg)](https://script.google.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5%2B-blue.svg)](https://www.typescriptlang.org)
+
+[English](README.md) | [Korean](README.ko.md)
+
+> [!IMPORTANT]
+> For guided installation by a coding agent, use the packaged [Jev-Mail setup skill](skills/jev-mail-setup/SKILL.md) and the [step-by-step onboarding guide](docs/onboarding.md). The installation uses your own Google Cloud project and Desktop OAuth client. You complete Google sign-in, consent, and the Apps Script editor approval; an authorized agent can help with Cloud project setup and resume the CLI after each handoff.
 
 Jev-Mail is a small Gmail inbox classifier with a CLI for installation, configuration, preview, and operations. The CLI uploads a versioned Google Apps Script worker. The worker polls the Gmail inbox on a Google time trigger, asks Jev for typed judgments, and applies labels, stars, and archive decisions even when the user's computer is off.
 
