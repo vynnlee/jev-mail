@@ -10,7 +10,7 @@ The CLI/GAS refactor is exercised at four distinct levels. A passing mocked test
 | Deterministic tests | Core policy/configuration, OAuth PKCE/state/refresh, worker idempotency/replies/retry/capacity | Passed |
 | Built artifact E2E | Spawned bundled CLI against mocked Google APIs; actual GAS bundle executed in a VM with fake GAS services | Passed |
 | npm package smoke | Packed tarball installed into a separate temporary prefix; binary version and config init/validate executed | Passed |
-| Live Google OAuth | Dedicated Desktop client prepared; personal Gmail authorization attempted | Blocked by `403 org_internal`: Cloud project's OAuth audience is Internal |
+| Live Google OAuth | Dedicated Desktop client prepared; personal Gmail authorization attempted | Initial `403 org_internal` resolved by External/Testing audience and test-user registration; browser authorization pending |
 | Live GAS deployment/trigger | Requires completed Google authorization and project link | Pending |
 | Live Jev inference | Requires a TypeSafe key via masked prompt, environment, or gitignored `.env` | Pending |
 | Scheduled Gmail classification | Requires the previous live gates, then observe a timer run and verify labels | Pending |

@@ -240,7 +240,7 @@ export async function authorize(credentials: DesktopCredentials, options: Author
   let timer: NodeJS.Timeout | undefined;
   try {
     const codePromise = new Promise<string>((resolve, reject) => {
-      timer = setTimeout(() => reject(new Error('Google sign-in timed out.')), options.timeoutMs ?? 120_000);
+      timer = setTimeout(() => reject(new Error('Google sign-in timed out. Run init again to open a fresh authorization link.')), options.timeoutMs ?? 15 * 60_000);
       server.on('request', (request, response) => {
         const url = new URL(request.url || '/', redirectUri);
         if (request.method !== 'GET' || url.pathname !== '/callback') {
