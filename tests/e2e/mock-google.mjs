@@ -78,6 +78,7 @@ globalThis.fetch = async (rawUrl, init = {}) => {
     }
     if (payload.function === 'verifySetup') {
       write(state);
+      if (process.env.JEV_E2E_VERIFY_ERROR === '1') return json({ error: { status: 'UNAVAILABLE' } }, 503);
       return json({ done: true, response: { result: { ready: true, apiKeyConfigured: state.apiKeyConfigured,
         modelVerified: process.env.JEV_E2E_MODEL_VERIFIED !== '0',
         triggerCount: Number(process.env.JEV_E2E_TRIGGER_COUNT ?? 1),

@@ -24,6 +24,8 @@ Do not print, log, fixture, or snapshot credentials. Redact the key from errors.
 
 ## Required Google onboarding
 
+For agent-assisted installation, follow [the packaged setup skill](skills/jev-mail-setup/SKILL.md). The user owns their Google Cloud project and account. An agent may prepare local files, validate YAML, run the CLI, read structured diagnostics, and resume the same installation. The user performs Google sign-in and consent, Apps Script editor approval, and masked key entry. An agent may help configure the user-owned Cloud project through an authorized session. Do not borrow a shared OAuth client or ask for credential contents in chat.
+
 The onboarding flow cannot be reduced to a local command because Google requires a browser OAuth approval, a Cloud project link, and one Apps Script editor action.
 
 Before asking the user to run `init`, ensure they understand this sequence:
@@ -42,6 +44,8 @@ Before asking the user to run `init`, ensure they understand this sequence:
 The numeric project number must belong to the project that owns the Desktop OAuth client. Do not substitute a project ID. The CLI cannot create the installable time trigger through the Apps Script API, so an agent must not claim that setup is complete until the user has run `installTrigger` and `status` reports the expected trigger.
 
 If setup pauses, show the exact browser links and the next required action. Do not retry blindly or create a second project. `--home DIR` creates an intentional separate installation.
+
+Use `doctor --json` to resume: inspect `schemaVersion`, `checks`, and `nextActions`, act on agent-owned steps, and present user-owned steps with their URLs. The default doctor does not change remote state or call the model; OAuth refresh may update the local token file. `--verify-model` is an explicit, potentially billable synthetic check. Do not infer trigger installation or mailbox behavior from a successful upload. If Google returns `org_internal`, inspect the OAuth audience and signed-in account; do not change the audience of an existing shared project without the owner's instruction.
 
 ## Configuration protocol
 

@@ -4,6 +4,8 @@
 
 [한국어 문서](README.ko.md)
 
+For guided installation by a coding agent, use the packaged [Jev-Mail setup skill](skills/jev-mail-setup/SKILL.md) and the [step-by-step onboarding guide](docs/onboarding.md). The installation uses your own Google Cloud project and Desktop OAuth client. You complete Google sign-in, consent, and the Apps Script editor approval; an authorized agent can help with Cloud project setup and resume the CLI after each handoff.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Engine: TypeSafe Jev](https://img.shields.io/badge/Engine-TypeSafe%20Jev-orange.svg)](https://typesafe.ai)
 [![Runtime: Google Apps Script](https://img.shields.io/badge/Runtime-Google%20Apps%20Script-green.svg)](https://script.google.com)
@@ -45,6 +47,8 @@ The worker validates returned probabilities before making a Gmail change. An amb
 - Apps Script API enabled from [Google Apps Script user settings](https://script.google.com/home/usersettings).
 
 If the OAuth consent screen is restricted to an organization, a personal Gmail account cannot authorize it. Use a Google Workspace account in that organization, or configure the consent screen for **External** testing and add the personal account as a test user. This is a project-wide audience setting and can affect other OAuth clients in the project; a dedicated Jev-Mail Cloud project is safer when existing clients must remain unchanged. See Google's [OAuth audience guidance](https://support.google.com/cloud/answer/15549945?hl=en).
+
+For an External app in Testing with Gmail scopes, Google says test-user authorization and an offline refresh token expire after seven days. Reauthorize the same installation with `init --reauthorize` when needed. This limits unattended CLI access; review Google's publishing and verification requirements before relying on long-term authorization.
 
 The Google Cloud project number used during `init` must be the numeric project number of the same project that owns the downloaded Desktop OAuth client. The CLI cannot repair a mismatch after authorization has started.
 
@@ -125,7 +129,8 @@ The published package exposes the `jev-mail` executable. In a repository checkou
 | `enable` | Resume scheduled classification |
 | `disable` | Pause scheduled classification while retaining the trigger |
 | `status` | Read the actual remote trigger, enabled state, account, and last run |
-| `doctor` | Validate local configuration and query the remote setup |
+| `doctor --json` | Diagnose setup without remote changes or model calls; return structured `checks` and `nextActions` for resuming an install |
+| `doctor --verify-model` | Explicit synthetic TypeSafe verification, which may use API quota |
 | `update` | Publish the current worker version to the existing GAS deployment |
 | `config init` | Write a default YAML configuration |
 | `config show` | Print the validated YAML configuration |
@@ -145,6 +150,8 @@ Useful options:
 --reauthorize    Reconnect Google during init after revoked or expired authorization
 --no-open        Print browser links without opening them
 ```
+
+For agent handoffs, `doctor --json` reports `schemaVersion: 1`, `ok`, checks with `pass`, `blocked`, or `unknown` status, and next actions assigned to `user` or `agent`. Suggested commands are argument arrays; preserve their separate arguments when running them. OAuth refresh may update the local token file. Keep the same `--home` and `--config` on every command. A script upload alone does not prove that the trigger or model connection works.
 
 Exit codes are stable for automation: `0` success, `1` unexpected failure, `2` invalid usage or configuration, `3` authorization or Google setup is needed, and `4` remote execution failure.
 

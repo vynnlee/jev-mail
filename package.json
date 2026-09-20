@@ -37,6 +37,9 @@
     "dist",
     "README.md",
     "README.ko.md",
+    "AGENTS.md",
+    "docs/onboarding.md",
+    "skills/jev-mail-setup/SKILL.md",
     "LICENSE",
     "jev-mail.example.yaml"
   ],

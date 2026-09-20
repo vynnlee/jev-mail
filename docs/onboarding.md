@@ -2,6 +2,8 @@
 
 This checklist covers the real first-install path for the CLI-managed, GAS-based Gmail classifier. It intentionally separates local preparation, Google authorization, Apps Script linking, trigger installation, and remote verification. A local command finishing successfully is not proof that the worker is running.
 
+An agent can follow the [packaged setup skill](../skills/jev-mail-setup/SKILL.md). Use a Google Cloud project and Desktop OAuth client owned by the person whose Gmail will be classified. The user completes browser sign-in and consent, the Apps Script editor approval, and masked TypeSafe key entry. An agent may help configure the user-owned Cloud project through an authorized session, prepare YAML, run the CLI, inspect diagnostics, and resume the same installation without handling credential contents.
+
 ## Before starting
 
 - [ ] Node.js 22 or newer is installed.
@@ -26,6 +28,8 @@ The project number must be the numeric number from this same Cloud project. A pr
 
 If the OAuth consent screen is **Internal**, a personal Gmail account is rejected with an organization-only authorization error. Use a Workspace account in that organization, or change the audience to **External** testing and add the personal account as a test user. The audience setting applies across the Cloud project and can affect other OAuth clients, so use a dedicated Jev-Mail project when that matters. See Google's [OAuth audience guidance](https://support.google.com/cloud/answer/15549945?hl=en).
 
+If the error code is `org_internal`, first check the signed-in account and the chosen project's audience. Do not alter the audience of a shared project or borrow its OAuth client to bypass this error. Google states that External/Testing authorizations requesting Gmail scopes, including offline refresh tokens, expire after seven days. The existing installation can be reauthorized with `init --reauthorize`; long-term authorization may require a different publishing and verification path.
+
 ## First CLI run
 
 From the repository:
@@ -48,6 +52,8 @@ The CLI will:
 6. Pause with a setup guide if the GAS project is not yet linked to the Cloud project or its trigger has not been installed.
 
 The default local home is `~/.config/jev-mail`. Use `--home DIR` to keep separate accounts or installations apart. The CLI writes local files with restrictive permissions, but the operating system account still controls access to them.
+
+When an agent runs the CLI, keep the interactive process open while the user completes browser consent. Do not send the OAuth JSON, token, TypeSafe key, or browser callback URL through chat. An agent only needs the protected JSON *path* and numeric project number for the command.
 
 ## Link the Apps Script project
 
@@ -88,6 +94,18 @@ If the Google refresh token has expired or been revoked, rerun the same command 
 If a key must be replaced, use `init --replace-key` with the new key in the masked prompt or `TYPESAFE_API_KEY`. The worker performs a synthetic TypeSafe connection check before saving the replacement; an invalid replacement leaves the previously stored key untouched.
 
 After configuration, `init` reports the account, script ID, deployment, and remote verification result. A successful upload without this verification is an incomplete installation.
+
+## Resume with structured diagnostics
+
+Run `doctor --json` with the same `--home` and `--config` options used for `init`:
+
+```bash
+node dist/cli/main.js doctor --json --home /absolute/path/to/installation --config /absolute/path/to/config.yaml
+```
+
+The versioned report has `schemaVersion: 1`, `ok`, `checks[]` with `pass`, `blocked`, or `unknown` status, and `nextActions[]` assigned to `user` or `agent`. Each action may include a URL or a command as an argument array. Preserve argument boundaries when running it. Carry out agent actions and give the user the exact link and one next step for user actions, then rerun doctor. An `unknown` check is not evidence of success. Do not make a second GAS project merely because setup paused. If no custom home or config was used, omit those flags consistently.
+
+Default `doctor` inspects local and remote state without changing remote state or calling TypeSafe. Refreshing Google OAuth may update the local token file. `doctor --verify-model` requests an explicit synthetic model check and may incur usage. It distinguishes a configured key from a working model connection. A locally valid YAML file or uploaded script cannot establish the Google account, installed trigger, or live TypeSafe result. Use `status` to confirm the active remote worker after `enable`.
 
 ## Preview and activate
 

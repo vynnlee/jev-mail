@@ -4,6 +4,8 @@
 
 [English](README.md)
 
+코딩 에이전트의 설치 안내를 받으려면 패키지에 포함된 [Jev-Mail 설치 스킬](skills/jev-mail-setup/SKILL.md)과 [온보딩 절차](docs/onboarding.md)를 사용하십시오. 사용자 소유 Google Cloud 프로젝트와 Desktop OAuth 클라이언트가 필요합니다. Google 로그인·동의와 Apps Script 편집기 승인은 사용자가 수행합니다. 권한을 받은 에이전트는 사용자 소유 Cloud 프로젝트 준비와 CLI 재개를 도울 수 있습니다.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Engine: TypeSafe Jev](https://img.shields.io/badge/Engine-TypeSafe%20Jev-orange.svg)](https://typesafe.ai)
 [![Runtime: Google Apps Script](https://img.shields.io/badge/Runtime-Google%20Apps%20Script-green.svg)](https://script.google.com)
@@ -44,6 +46,8 @@ CLI는 상시 실행되는 데몬이 아니며, 사용자 컴퓨터를 켜둘 �
 - [Google Apps Script 사용자 설정](https://script.google.com/home/usersettings)에서 Apps Script API 활성화.
 
 OAuth 동의 화면이 조직 전용(Internal)으로 제한되어 있으면 개인 Gmail 계정은 인증할 수 없습니다. 해당 조직의 Google Workspace 계정을 사용하거나, 동의 화면을 **External** 테스트로 설정하고 개인 계정을 테스트 사용자로 추가하십시오. 이 설정은 프로젝트 전체의 OAuth 클라이언트에 영향을 줄 수 있으므로 기존 클라이언트를 보존해야 한다면 Jev-Mail 전용 Cloud 프로젝트를 사용하는 편이 안전합니다. 자세한 내용은 Google의 [OAuth audience 안내](https://support.google.com/cloud/answer/15549945?hl=en)를 확인하십시오.
+
+Google 안내에 따르면 Gmail 권한을 요청하는 External/Testing 앱의 테스트 사용자 승인과 오프라인 갱신 토큰은 7일 후 만료됩니다. 필요하면 기존 설치에서 `init --reauthorize`를 실행하십시오. 장기 무인 운영을 계획한다면 Google의 게시·검증 요건을 확인해야 합니다.
 
 `init`에 전달하는 프로젝트 번호는 다운로드한 Desktop OAuth 클라이언트를 소유한 같은 Google Cloud 프로젝트의 숫자형 프로젝트 번호여야 합니다. OAuth 인증이 시작된 뒤 CLI가 프로젝트 불일치를 자동으로 고칠 수는 없습니다.
 
@@ -124,7 +128,8 @@ init -> GAS 프로젝트 연결 -> installTrigger 실행 -> init 재실행 -> pr
 | `enable` | 예약된 분류 재개 |
 | `disable` | 트리거를 유지하면서 예약 분류 일시 정지 |
 | `status` | 실제 원격 트리거, 활성 상태, 계정, 최근 실행 확인 |
-| `doctor` | 로컬 설정과 원격 설치 점검 |
+| `doctor --json` | 원격 변경과 모델 호출 없이 설치를 점검하고 `checks`와 `nextActions` 출력 |
+| `doctor --verify-model` | API 사용량이 발생할 수 있는 명시적 TypeSafe 합성 검증 |
 | `update` | 현재 워커 버전을 기존 GAS 배포에 업로드 |
 | `config init` | 기본 YAML 설정 생성 |
 | `config show` | 검증된 YAML 설정 출력 |
@@ -144,6 +149,8 @@ init -> GAS 프로젝트 연결 -> installTrigger 실행 -> init 재실행 -> pr
 --reauthorize    인증이 만료되거나 철회된 뒤 init에서 Google 재연결
 --no-open        브라우저를 열지 않고 링크만 출력
 ```
+
+에이전트가 설치를 이어갈 때 `doctor --json`은 `schemaVersion: 1`, `ok`, 각 검사 결과(`pass`, `blocked`, `unknown`), 사용자 또는 에이전트가 수행할 다음 작업을 제공합니다. 제안 명령은 인자 배열이므로 각 인자를 분리해 실행하십시오. OAuth 갱신 과정에서 로컬 토큰 파일은 바뀔 수 있습니다. 모든 명령에 같은 `--home`과 `--config`를 사용하십시오. 코드 업로드만으로 트리거나 모델 연결을 확인했다고 판단할 수 없습니다.
 
 종료 코드는 자동화에서 사용할 수 있습니다. `0` 성공, `1` 예상하지 못한 오류, `2` 잘못된 사용법 또는 설정, `3` 인증 또는 Google 설정 필요, `4` 원격 실행 오류입니다.
 

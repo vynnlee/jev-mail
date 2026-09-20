@@ -118,12 +118,35 @@ test('CLI onboarding resumes safely and operates against mocked Google transport
   result = invoke(['init', '--project-number', '123456789012', '--no-open'], { JEV_E2E_MODEL_VERIFIED: '0' });
   assert.equal(result.code, 3, JSON.stringify(result.data));
   assert.match(result.data.error, /model|verification|setup/i);
-  result = invoke(['doctor'], { JEV_E2E_MODEL_VERIFIED: '0' });
+  result = invoke(['doctor', '--verify-model'], { JEV_E2E_MODEL_VERIFIED: '0' });
   assert.equal(result.code, 3, JSON.stringify(result.data));
   result = invoke(['doctor'], { JEV_E2E_TRIGGER_COUNT: '0' });
   assert.equal(result.code, 3, JSON.stringify(result.data));
-  result = invoke(['doctor']);
+  result = invoke(['doctor', '--verify-model'], { JEV_E2E_VERIFY_ERROR: '1' });
+  assert.equal(result.code, 3);
+  assert.ok(result.data.checks.some(c => c.id === 'remote' && c.status === 'pass'));
+  assert.ok(result.data.checks.some(c => c.code === 'MODEL_CHECK_FAILED'));
+  assert.equal(result.data.nextActions.some(a => a.id === 'inspect_remote_access'), false);
+  const beforeDoctor = readState().calls.length;
+  result = invoke(['doctor'], { JEV_E2E_MODEL_VERIFIED: '0' });
   assert.equal(result.code, 0, JSON.stringify(result.data));
+  assert.equal(result.data.schemaVersion, 1);
+  assert.ok(result.data.checks.some(c => c.code === 'WORKER_PAUSED'));
+  assert.ok(result.data.checks.some(c => c.code === 'RUN_NOT_OBSERVED'));
+  assert.ok(result.data.checks.some(c => c.code === 'MODEL_NOT_CHECKED'));
+  const doctorCalls = readState().calls.slice(beforeDoctor);
+  assert.equal(doctorCalls.some(c => c.body?.function === 'verifySetup'), false);
+  assert.equal(doctorCalls.some(c => c.method !== 'GET' && c.body?.function !== 'status'), false);
+  result = invoke(['doctor'], { JEV_E2E_REMOTE_READY: '0' });
+  assert.equal(result.code, 3);
+  assert.ok(result.data.checks.some(c => c.code === 'PERMISSION_DENIED'));
+  assert.ok(result.data.nextActions.some(a => a.id === 'inspect_remote_access'));
+  const beforeAccountCheck = readState().calls.length;
+  result = invoke(['doctor'], { JEV_E2E_ACCOUNT: 'other@example.com' });
+  assert.equal(result.code, 3);
+  assert.ok(result.data.checks.some(c => c.code === 'ACCOUNT_MISMATCH'));
+  assert.equal(readState().calls.slice(beforeAccountCheck).some(c => c.path.endsWith(':run')), false);
+
 
   result = invoke(['preview', '--limit', '4']);
   assert.equal(result.code, 0);
@@ -148,4 +171,34 @@ test('CLI onboarding resumes safely and operates against mocked Google transport
   result = invoke(['status', '--unknown-option']);
   assert.equal(result.code, 2, JSON.stringify(result.data));
   assert.equal(result.data.ok, false);
+});
+
+test('doctor diagnoses a fresh or corrupt home without creating files or exposing contents', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jev-doctor-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const home = path.join(dir, 'not-created');
+  const config = path.join(dir, 'custom config.yaml');
+  const run = () => spawnSync(process.execPath, [cli, 'doctor', '--json', '--home', home, '--config', config], {
+    cwd: dir, encoding: 'utf8', timeout: 15000,
+  });
+  let result = run();
+  assert.equal(result.status, 3);
+  let report = JSON.parse(result.stdout);
+  assert.equal(report.schemaVersion, 1);
+  assert.equal(report.ok, false);
+  assert.equal(fs.existsSync(home), false);
+  assert.ok(report.checks.some(c => c.code === 'OAUTH_CLIENT_MISSING'));
+  assert.deepEqual(report.nextActions.find(a => a.id === 'create_config').command,
+    ['jev-mail', 'config', 'init', '--home', home, '--config', config]);
+  fs.mkdirSync(home);
+  fs.writeFileSync(path.join(home, 'google-client.json'), '{ SECRET_SENTINEL');
+  fs.writeFileSync(path.join(home, 'installation.json'), '{ SECRET_SENTINEL');
+  fs.writeFileSync(config, 'SECRET_SENTINEL');
+  result = run();
+  assert.equal(result.status, 3);
+  report = JSON.parse(result.stdout);
+  assert.ok(report.checks.some(c => c.code === 'LOCAL_FILE_INVALID'));
+  assert.ok(report.checks.some(c => c.code === 'CONFIG_INVALID'));
+  assert.doesNotMatch(result.stdout + result.stderr, /SECRET_SENTINEL/);
+  assert.equal(fs.readFileSync(path.join(home, 'installation.json'), 'utf8'), '{ SECRET_SENTINEL');
 });
