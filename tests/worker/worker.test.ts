@@ -352,3 +352,59 @@ test('full durable receipt store fails closed before another model call', () => 
   assert.equal(threads[0].labels.size, 0);
   assert.equal(worker.status().receiptCapacityReached, true);
 });
+
+test('system-one provider sends requests to a configured gateway', () => {
+  config.provider = { type: 'system-one', baseUrl: 'https://gateway.example.com/v1', headers: { 'X-Team': 'mail' } };
+  const requests: any[] = [];
+  (globalThis as any).UrlFetchApp = { fetch: (url: string, options: any) => {
+    calls++;
+    requests.push({ url, options });
+    return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ answers }) };
+  } };
+  try {
+    configure('gateway-key');
+    assert.equal(properties.get('TYPESAFE_API_KEY'), 'gateway-key');
+    assert.equal(worker.status().provider, 'system-one');
+    const thread = new Thread('t1', [new Message('m1', 'Receipt')]);
+    threads.push(thread);
+    worker.installTrigger();
+    enable();
+    json(worker.autoTriageInbox());
+    const last = requests[requests.length - 1];
+    assert.equal(last.url, 'https://gateway.example.com/v1/systemone');
+    assert.equal(last.options.headers.Authorization, 'Bearer gateway-key');
+    assert.equal(last.options.headers['X-Team'], 'mail');
+    assert.equal(last.options.contentType, 'application/json');
+    assert.equal(JSON.parse(last.options.payload).model, 'jev-latest');
+    assert.equal(thread.archived, true);
+  } finally { delete config.provider; }
+});
+
+test('openai-compatible provider classifies with its own key and endpoint', () => {
+  config.provider = { type: 'openai-compatible', baseUrl: 'https://litellm.example.com/v1' };
+  let request: any;
+  (globalThis as any).UrlFetchApp = { fetch: (url: string, options: any) => {
+    calls++;
+    request = { url, options };
+    return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ choices: [{ message: {
+      content: JSON.stringify({ requires_action: 0.02, is_important: 0.1, bucket: 'receipts', bucket_confidence: 0.9 }) } }] }) };
+  } };
+  try {
+    properties.set('TYPESAFE_API_KEY', 'old-typesafe-key');
+    assert.equal(worker.status().apiKeyConfigured, false, 'TypeSafe key must not be reused for another provider');
+    assert.throws(() => worker.setEnabled(true), /Model provider API key is not configured/);
+    configure('litellm-key');
+    assert.equal(properties.get('PROVIDER_API_KEY'), 'litellm-key');
+    assert.equal(worker.status().provider, 'openai-compatible');
+    const thread = new Thread('t1', [new Message('m1', 'Receipt')]);
+    threads.push(thread);
+    worker.installTrigger();
+    enable();
+    json(worker.autoTriageInbox());
+    assert.equal(request.url, 'https://litellm.example.com/v1/chat/completions');
+    assert.equal(request.options.headers.Authorization, 'Bearer litellm-key');
+    assert.equal(request.options.contentType, 'application/json');
+    assert.equal(thread.labels.has('Receipts'), true);
+    assert.equal(thread.archived, true);
+  } finally { delete config.provider; }
+});

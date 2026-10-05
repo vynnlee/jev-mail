@@ -1,6 +1,22 @@
 version: 1
 model: jev-latest
 
+# Optional. System One at TypeSafe is the default and recommended backend.
+# Point at another System One-compatible endpoint:
+# provider:
+#   type: system-one
+#   baseUrl: https://gateway.example.com/v1
+#
+# Fallback for OpenAI-compatible APIs (OpenRouter, LiteLLM proxy, OpenAI, Groq,
+# Gemini, a public Ollama/vLLM server); set `model` to that endpoint's name:
+# provider:
+#   type: openai-compatible
+#   baseUrl: https://openrouter.ai/api/v1
+#   headers:
+#     X-Title: Jev-Mail
+#   responseFormat: json_schema   # json_schema | json_object | none
+# Headers are not secret. Enter the API key via `init` or JEV_MAIL_API_KEY.
+
 labels:
   action: Follow Up
   review: Review
@@ -38,7 +54,7 @@ categories:
     description: Automated service notices, verification codes, password resets, security alerts, and repository activity
     examples:
       - Your verification code is 582914
-      - Security alert: New login detected
+      - 'Security alert: New login detected'
       - '[GitHub] Pull request #123 merged'
     archive: true
 

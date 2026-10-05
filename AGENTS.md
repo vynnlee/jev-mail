@@ -12,13 +12,13 @@ Do not turn this project into a web dashboard, a local daemon, a reply generator
 
 ## Security and credentials
 
-Never ask the user to paste a TypeSafe key into chat, a commit, a source file, or a command-line argument.
+Never ask the user to paste a model API key (TypeSafe, OpenRouter, LiteLLM, or other) into chat, a commit, a source file, or a command-line argument.
 
 Use one of these paths:
 
 - Run `jev-mail init` interactively and let its masked prompt collect the key.
-- Set `TYPESAFE_API_KEY` in the process environment before `init` in a controlled shell.
-- If the user chooses manual setup, have them enter the key directly in Apps Script Project Settings as the `TYPESAFE_API_KEY` Script Property.
+- Set `JEV_MAIL_API_KEY` (any provider) or `TYPESAFE_API_KEY` (System One at TypeSafe only) in the process environment before `init` in a controlled shell.
+- If the user chooses manual setup, have them enter the key directly in Apps Script Project Settings as the `TYPESAFE_API_KEY` Script Property, or `PROVIDER_API_KEY` when the config sets the `provider.type: openai-compatible` fallback. Prefer System One (the default) unless the user asks for another provider.
 
 Do not print, log, fixture, or snapshot credentials. Redact the key from errors. OAuth client JSON and refresh token files are local secrets and must not be committed.
 

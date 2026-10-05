@@ -1,4 +1,4 @@
-import { buildPayload, decide } from '../core/index.js';
+import { apiKeyProperty, buildModelRequest, decide, parseModelResponse, providerName } from '../core/index.js';
 
 // Apps Script supplies these services at runtime. Keeping this adapter free of
 // Google typings also lets the same bundle run against an in-memory E2E harness.
@@ -13,7 +13,6 @@ declare const JEV_CONFIG: any;
 
 const PREFIX = 'JEV_MAIL_';
 const RECEIPT_PREFIX = PREFIX + 'RECEIPT_';
-const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const RECEIPT_LIMIT = 1200;
 const RECEIPT_TTL_MS = 180 * 24 * 60 * 60 * 1000;
 
@@ -24,13 +23,15 @@ function config(): any {
   }
   return JEV_CONFIG;
 }
+function keyName(): string { return apiKeyProperty(config()); }
+function storedKey(): string | null { return props().getProperty(keyName()); }
 function now(): number { return Date.now(); }
 function output(value: unknown): string { return JSON.stringify(value); }
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 function policyFingerprint(cfg: any): string {
-  const source = output({ model: cfg.model, labels: cfg.labels, thresholds: cfg.thresholds,
+  const source = output({ model: cfg.model, provider: cfg.provider, labels: cfg.labels, thresholds: cfg.thresholds,
     categories: cfg.categories, mode: cfg.runtime.mode });
   let hash = 2166136261;
   for (let i = 0; i < source.length; i++) {
@@ -65,13 +66,13 @@ export function setEnabled(enabled: boolean): any {
   if (typeof enabled !== 'boolean') throw new Error('enabled must be boolean');
   config();
   if (enabled) {
-    if (!props().getProperty('TYPESAFE_API_KEY')) throw new Error('TypeSafe API key is not configured');
+    if (!storedKey()) throw new Error(providerName(config()) + ' API key is not configured');
     if (ownedTriggers().length !== 1) throw new Error('Run installTrigger once in Apps Script editor');
     if (!baseSetup().triggerIntervalMatches) {
       throw new Error('Trigger interval differs from configuration; rerun installTrigger in Apps Script editor');
     }
     const verified = verifySetup();
-    if (!verified.modelVerified) throw new Error('TypeSafe connection check failed: ' + verified.modelError);
+    if (!verified.modelVerified) throw new Error(providerName(config()) + ' connection check failed: ' + verified.modelError);
   }
   props().setProperty(PREFIX + 'ENABLED', enabled ? 'true' : 'false');
   return { enabled };
@@ -81,13 +82,14 @@ export function disableTrigger(): any { return setEnabled(false); }
 
 /** Transmits the key to this script once through the authenticated execution API. */
 export function configure(apiKey: string): any {
+  const name = providerName(config());
   if (typeof apiKey !== 'string' || !apiKey.trim() || apiKey.length > 4096) {
-    throw new Error('A nonempty TypeSafe API key is required');
+    throw new Error('A nonempty ' + name + ' API key is required');
   }
   const candidate = apiKey.trim();
   try { verifyModel(candidate); }
-  catch (error) { throw new Error('TypeSafe key verification failed: ' + errorText(error)); }
-  props().setProperty('TYPESAFE_API_KEY', candidate);
+  catch (error) { throw new Error(name + ' key verification failed: ' + errorText(error)); }
+  props().setProperty(keyName(), candidate);
   return { apiKeyConfigured: true, modelVerified: true };
 }
 
@@ -100,7 +102,8 @@ function baseSetup(): any {
   try { accountEmail = Session.getEffectiveUser().getEmail() || ''; } catch { /* scope may hide email */ }
   return {
     configVersion: cfg.version,
-    apiKeyConfigured: Boolean(props().getProperty('TYPESAFE_API_KEY')),
+    provider: cfg.provider ? cfg.provider.type : 'system-one',
+    apiKeyConfigured: Boolean(storedKey()),
     triggerCount,
     actualIntervalMinutes,
     desiredIntervalMinutes: cfg.runtime.intervalMinutes,
@@ -120,9 +123,9 @@ function verifyModel(apiKey: string): void {
 export function verifySetup(): any {
   const base = baseSetup();
   if (!base.apiKeyConfigured) return { ...base, modelVerified: false,
-    modelError: 'TypeSafe API key is not configured' };
+    modelError: providerName(config()) + ' API key is not configured' };
   try {
-    verifyModel(props().getProperty('TYPESAFE_API_KEY'));
+    verifyModel(storedKey() as string);
     return { ...base, modelVerified: true };
   } catch (error) {
     return { ...base, modelVerified: false, modelError: errorText(error) };
@@ -212,20 +215,21 @@ function emailFrom(message: any, thread: any): any {
 }
 
 function infer(email: any, cfg: any, apiKey: string): any {
-  const response = UrlFetchApp.fetch(ENDPOINT, {
+  const request = buildModelRequest(email, cfg, apiKey);
+  const { 'Content-Type': contentType, ...headers } = request.headers;
+  const response = UrlFetchApp.fetch(request.url, {
     method: 'post',
-    contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + apiKey },
-    payload: output(buildPayload(email, cfg)),
+    contentType,
+    headers,
+    payload: request.body,
     muteHttpExceptions: true,
   });
   const code = response.getResponseCode();
-  if (code < 200 || code >= 300) throw new Error('TypeSafe API HTTP ' + code);
+  if (code < 200 || code >= 300) throw new Error(providerName(cfg) + ' API HTTP ' + code);
   let parsed: any;
   try { parsed = JSON.parse(response.getContentText()); }
-  catch { throw new Error('TypeSafe API returned invalid JSON'); }
-  if (!parsed || !parsed.answers) throw new Error('TypeSafe API returned no answers');
-  return decide(parsed.answers, cfg);
+  catch { throw new Error(providerName(cfg) + ' API returned invalid JSON'); }
+  return decide(parseModelResponse(parsed, cfg), cfg);
 }
 
 function labelFor(name: string): any {
@@ -269,8 +273,8 @@ function run(preview: boolean, limit?: number): any {
   const cfg = config();
   const runtime = cfg.runtime;
   const policy = policyFingerprint(cfg);
-  const apiKey = props().getProperty('TYPESAFE_API_KEY');
-  if (!apiKey) throw new Error('TypeSafe API key is not configured');
+  const apiKey = storedKey();
+  if (!apiKey) throw new Error(providerName(cfg) + ' API key is not configured');
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return { skipped: 'another run is active' };
   const started = now();
