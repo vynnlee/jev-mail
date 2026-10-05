@@ -11,6 +11,7 @@ import { parseLegacyJsonConfig } from '../configuration/migrate.js';
 import { defaultHome, readJson, writePrivate, type Installation } from './storage.js';
 import { ask, confirm, secret, openBrowser } from './prompts.js';
 import { diagnose } from './doctor.js';
+import { providerName, usesTypeSafe } from '../core/provider.js';
 
 declare const __VERSION__: string;
 const VERSION = typeof __VERSION__ === 'undefined' ? '0.2.0-dev' : __VERSION__;
@@ -166,9 +167,16 @@ function setupInstructions(state: BoundInstallation) {
     `1. Open Project Settings: ${settings(state.scriptId)}`,
     `2. Under Google Cloud Platform project, select Change project and enter ${state.projectNumber}. This MUST be the project that owns your Desktop OAuth client.`,
     '3. In the editor, select installTrigger and click Run. Complete Google permission approval. This creates one paused timer; classification is NOT enabled yet.',
-    '4. Run jev-mail init again. The CLI checks access and securely sets the TypeSafe key.',
+    '4. Run jev-mail init again. The CLI checks access and securely sets the model API key.',
     'Then run jev-mail preview --limit 10, followed by jev-mail enable.',
   ];
+}
+/** JEV_MAIL_API_KEY works for any provider; TYPESAFE_API_KEY only for TypeSafe so it never leaks to a third party. */
+function apiKeyEnvNames(config: Parameters<typeof usesTypeSafe>[0]) {
+  return usesTypeSafe(config) ? ['JEV_MAIL_API_KEY', 'TYPESAFE_API_KEY'] : ['JEV_MAIL_API_KEY'];
+}
+function apiKeyFromEnv(config: Parameters<typeof usesTypeSafe>[0]) {
+  return apiKeyEnvNames(config).map(name => process.env[name]).find(Boolean);
 }
 async function init() {
   const config = await ensureConfig();
@@ -201,14 +209,15 @@ async function init() {
     throw new CliError('Google setup needs your one-time browser approval.', 3, { scriptId: state.scriptId, steps });
   }
   if (!remote.apiKeyConfigured || args['replace-key']) {
-    let key = process.env.TYPESAFE_API_KEY;
-    if (!key && !args.json && process.stdin.isTTY) key = await secret('TypeSafe API key (hidden; stored only in GAS Script Properties)');
-    if (!key) throw new CliError('TypeSafe key missing. Set TYPESAFE_API_KEY and rerun init, or run init interactively.', 3);
+    const name = providerName(config);
+    let key = apiKeyFromEnv(config);
+    if (!key && !args.json && process.stdin.isTTY) key = await secret(`${name} API key (hidden; stored only in GAS Script Properties)`);
+    if (!key) throw new CliError(`${name} key missing. Set ${apiKeyEnvNames(config).join(' or ')} and rerun init, or run init interactively.`, 3);
     await client.run(state.deploymentId!, 'configure', [key]);
   }
   const result: any = await client.run(state.deploymentId!, 'verifySetup');
   const verified = typeof result === 'string' ? JSON.parse(result) : result;
-  if (!verified.modelVerified || verified.triggerCount !== 1 || verified.triggerIntervalMatches === false) throw new CliError('Setup verification incomplete. Use init --replace-key for an invalid TypeSafe key and run installTrigger in the Apps Script editor.', 3, { verification: verified, steps: setupInstructions(state) });
+  if (!verified.modelVerified || verified.triggerCount !== 1 || verified.triggerIntervalMatches === false) throw new CliError('Setup verification incomplete. Use init --replace-key for an invalid model API key and run installTrigger in the Apps Script editor.', 3, { verification: verified, steps: setupInstructions(state) });
   emit({ installed: true, accountEmail, scriptId: state.scriptId, configPath, verification: verified, next: ['jev-mail preview --limit 10', 'jev-mail enable'] });
 }
 async function configCommand() {
@@ -252,7 +261,7 @@ async function configCommand() {
   }
   throw new CliError('Use config init|migrate|show|validate|edit|add-label|remove-label|set-mode|apply.', 2);
 }
-const help = `jev-mail ${VERSION}\nCLI-managed, always-on Gmail classification with Jev + Google Apps Script.\n\nFirst use:\n  jev-mail init --credentials ./client.json --project-number NUMBER\n  jev-mail preview --limit 10\n  jev-mail enable\n\nCommands:\n  init                 Resume-safe installation and Google authorization guide\n  preview --limit N    Classify up to 20 inbox threads without Gmail changes (API usage applies)\n  enable / disable     Resume / pause the cloud worker\n  status               Read actual cloud worker status\n  doctor               Diagnose setup without changing Gmail or calling Jev\n  update               Publish this CLI's worker version\n  config init|show|validate|edit|apply\n  config migrate --from old-taxonomy.json --config new-config.yaml\n  config add-label --key KEY --label LABEL --description RULE --archive true|false\n  config remove-label --key KEY\n  config set-mode --mode label-only|archive\n\nOptions:\n  --home DIR           Separate installation/account (default ~/.config/jev-mail)\n  --config FILE        YAML configuration path\n  --json               Machine-readable output; no interactive prompts\n  --verify-model       With doctor, make a synthetic Jev verification call (usage applies)\n  --replace-key        Validate and replace the TypeSafe key during init\n  --reauthorize        Reconnect Google during init after revoked/expired authorization\n  --no-open            Print browser links without opening them\n\nGoogle setup: your own Desktop OAuth client, Apps Script + Gmail APIs enabled,\nOAuth consent/test user, Apps Script API enabled in script.google.com/home/usersettings.\nThe CLI uploads code. You link its Cloud project and run installTrigger in the editor once.\nNo public web app, third-party server, or always-on local process is required.\nSecrets: use the masked init prompt or TYPESAFE_API_KEY, never a command-line flag.\nExit codes: 0 success, 1 failure, 2 invalid config/usage, 3 authorization/setup needed, 4 remote failure.\n`;
+const help = `jev-mail ${VERSION}\nCLI-managed, always-on Gmail classification with Jev + Google Apps Script.\n\nFirst use:\n  jev-mail init --credentials ./client.json --project-number NUMBER\n  jev-mail preview --limit 10\n  jev-mail enable\n\nCommands:\n  init                 Resume-safe installation and Google authorization guide\n  preview --limit N    Classify up to 20 inbox threads without Gmail changes (API usage applies)\n  enable / disable     Resume / pause the cloud worker\n  status               Read actual cloud worker status\n  doctor               Diagnose setup without changing Gmail or calling the model\n  update               Publish this CLI's worker version\n  config init|show|validate|edit|apply\n  config migrate --from old-taxonomy.json --config new-config.yaml\n  config add-label --key KEY --label LABEL --description RULE --archive true|false\n  config remove-label --key KEY\n  config set-mode --mode label-only|archive\n\nOptions:\n  --home DIR           Separate installation/account (default ~/.config/jev-mail)\n  --config FILE        YAML configuration path\n  --json               Machine-readable output; no interactive prompts\n  --verify-model       With doctor, make a synthetic model verification call (usage applies)\n  --replace-key        Validate and replace the model API key during init\n  --reauthorize        Reconnect Google during init after revoked/expired authorization\n  --no-open            Print browser links without opening them\n\nGoogle setup: your own Desktop OAuth client, Apps Script + Gmail APIs enabled,\nOAuth consent/test user, Apps Script API enabled in script.google.com/home/usersettings.\nThe CLI uploads code. You link its Cloud project and run installTrigger in the editor once.\nNo public web app, third-party server, or always-on local process is required.\nModels: System One at TypeSafe by default. Set provider.type: system-one with\nprovider.baseUrl in the YAML to use another System One-compatible endpoint.\nSecrets: use the masked init prompt or JEV_MAIL_API_KEY (TYPESAFE_API_KEY for\nTypeSafe), never a command-line flag.\nExit codes: 0 success, 1 failure, 2 invalid config/usage, 3 authorization/setup needed, 4 remote failure.\n`;
 async function main() {
   if (args.version) { emit({ version: VERSION }, VERSION); return; }
   if (args.help || command === 'help') { emit({ help }, help); return; }
@@ -302,7 +311,8 @@ async function withLock(operation: () => Promise<void>) {
 withLock(main).catch((error: any) => {
   const code = error instanceof CliError ? error.code : error instanceof GoogleApiError ? ([401, 403].includes(error.status) ? 3 : 4) : 1;
   // Never include API payloads, tokens, environment values, or stack traces.
-  const message = String(error.message || 'Command failed').replaceAll(process.env.TYPESAFE_API_KEY || '\0', '[redacted]');
+  let message = String(error.message || 'Command failed');
+  for (const name of ['JEV_MAIL_API_KEY', 'TYPESAFE_API_KEY']) message = message.replaceAll(process.env[name] || '\0', '[redacted]');
   emit({ ok: false, code: error instanceof GoogleApiError ? error.code : 'CLI_ERROR', error: message, nextActions: [{ id: 'diagnose', actor: 'agent', description: 'Inspect resumable setup state without changing Gmail.', command: ['jev-mail', 'doctor', '--json', '--home', home, ...(args.config ? ['--config', configPath] : [])] }], ...(error.details ? { details: error.details } : {}) }, `${message}${error.details?.steps ? '\n\n' + error.details.steps.join('\n') : ''}`);
   process.exitCode = code;
 });

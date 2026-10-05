@@ -30,7 +30,12 @@ export async function diagnose(options: Options) {
   tokens = await load('google-tokens.json', 'authorization');
   const configPath = options.configPath || (typeof state?.configPath === 'string' ? state.configPath : undefined) || path.join(options.home, 'config.yaml');
   let configValid = false;
-  try { parseConfigYaml(await fs.readFile(configPath, 'utf8')); configValid = true; add('config', 'pass', 'CONFIG_VALID', 'Local YAML is valid.'); }
+  try {
+    const config = parseConfigYaml(await fs.readFile(configPath, 'utf8'));
+    configValid = true; add('config', 'pass', 'CONFIG_VALID', 'Local YAML is valid.');
+    add('provider', 'pass', 'SYSTEM_ONE_PROVIDER', config.provider?.baseUrl
+      ? 'Using a custom System One endpoint.' : 'Using System One at TypeSafe.');
+  }
   catch (error: any) {
     add('config', 'blocked', error.code === 'ENOENT' ? 'CONFIG_MISSING' : 'CONFIG_INVALID',
       error.code === 'ENOENT' ? 'No local configuration yet.' : 'Configuration is invalid or unreadable; inspect locally without publishing its contents.',
@@ -76,11 +81,11 @@ export async function diagnose(options: Options) {
         const result = typeof value === 'string' ? JSON.parse(value) : value;
         if (!result || typeof result !== 'object' || typeof result.enabled !== 'boolean' || typeof result.apiKeyConfigured !== 'boolean' || !Number.isInteger(result.triggerCount)) throw new Error('Invalid remote status');
         // Allowlist diagnostics: never emit arbitrary remote errors, email subjects or properties.
-        remote = { enabled: result.enabled, apiKeyConfigured: result.apiKeyConfigured, triggerCount: result.triggerCount,
+        remote = { provider: typeof result.provider === 'string' ? result.provider : 'system-one', enabled: result.enabled, apiKeyConfigured: result.apiKeyConfigured, triggerCount: result.triggerCount,
           triggerIntervalMatches: result.triggerIntervalMatches, receiptCapacityReached: result.receiptCapacityReached };
         add('remote', 'pass', 'REMOTE_ACCESSIBLE', 'GAS status is accessible.');
         add('api_key', result.apiKeyConfigured ? 'pass' : 'blocked', result.apiKeyConfigured ? 'API_KEY_PRESENT' : 'API_KEY_MISSING',
-          result.apiKeyConfigured ? 'TypeSafe key is configured; presence alone does not verify it.' : 'TypeSafe key is missing.', result.apiKeyConfigured ? undefined : init);
+          result.apiKeyConfigured ? 'Model API key is configured; presence alone does not verify it.' : 'Model API key is missing for the configured provider.', result.apiKeyConfigured ? undefined : init);
         const triggerReady = result.triggerCount === 1 && result.triggerIntervalMatches === true;
         add('trigger', triggerReady ? 'pass' : 'blocked', triggerReady ? 'TRIGGER_READY' : 'TRIGGER_SETUP_REQUIRED',
           triggerReady ? 'Exactly one trigger with the configured interval exists.' : 'Run installTrigger in the editor and approve permissions.', {
@@ -88,7 +93,7 @@ export async function diagnose(options: Options) {
         if (triggerReady) delete checks[checks.length - 1].action;
         add('worker', result.enabled ? 'pass' : 'unknown', result.enabled ? 'WORKER_ENABLED' : 'WORKER_PAUSED',
           result.enabled ? 'Worker is enabled; this does not prove a timer has executed.' : 'Worker is paused. Review a preview before enabling.', result.enabled ? undefined : {
-            id: 'preview_before_enable', actor: 'agent', description: 'Preview is read-only for Gmail but sends inbox content to Jev and consumes API usage. Enable only within the user-authorized scope.', command: command('preview', '--limit', '1') });
+            id: 'preview_before_enable', actor: 'agent', description: 'Preview is read-only for Gmail but sends inbox content to the configured model provider and consumes API usage. Enable only within the user-authorized scope.', command: command('preview', '--limit', '1') });
         const last = result.lastRun;
         const observed = last && typeof last.at === 'string';
         add('scheduled_run', observed ? 'pass' : 'unknown', observed ? 'RUN_RECORDED' : 'RUN_NOT_OBSERVED',
@@ -100,7 +105,7 @@ export async function diagnose(options: Options) {
           const verification = typeof raw === 'string' ? JSON.parse(raw) : raw;
           const verified = verification?.modelVerified === true;
           add('model', verified ? 'pass' : 'blocked', verified ? 'MODEL_VERIFIED' : 'MODEL_VERIFICATION_FAILED',
-            verified ? 'Synthetic TypeSafe request succeeded.' : 'Synthetic TypeSafe request failed. Check provider availability and key; init --replace-key validates a replacement before saving.');
+            verified ? 'Synthetic model request succeeded.' : 'Synthetic model request failed. Check provider availability and key; init --replace-key validates a replacement before saving.');
           } catch {
             add('model', 'blocked', 'MODEL_CHECK_FAILED', 'Synthetic verification could not complete. GAS status was accessible; check provider/key and retry verification before changing the Cloud project.');
           }

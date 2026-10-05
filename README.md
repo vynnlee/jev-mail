@@ -99,7 +99,7 @@ The trigger is created in a paused state. It does not classify mail until `enabl
 
 ### 4. Resume onboarding and configure the key
 
-Run the same `init` command again. The CLI verifies the linked project and trigger, then asks for the TypeSafe key through a masked prompt. For automation, set `TYPESAFE_API_KEY` in the environment before running `init`; never put the key in a command-line argument.
+Run the same `init` command again. The CLI verifies the linked project and trigger, then asks for the model API key (TypeSafe by default, see [Model provider](#model-provider)) through a masked prompt. For automation, set `JEV_MAIL_API_KEY` (or `TYPESAFE_API_KEY` for TypeSafe) in the environment before running `init`; never put the key in a command-line argument.
 
 The key is sent over the authenticated Google execution API to the worker's Script Properties. It is not written to the repository or printed by the CLI.
 
@@ -200,6 +200,25 @@ Configuration rules:
 - Action and Review labels must be distinct from one another, every category label, and Gmail system labels such as `INBOX`, `SPAM`, `TRASH`, and `STARRED`.
 - Category keys use lowercase letters, numbers, hyphens, and underscores. Unknown YAML properties and unsafe values are rejected before upload.
 
+### Model provider
+
+Without a `provider` block, Jev-Mail uses System One at TypeSafe (`https://api.typesafe.ai/v1/systemone`). To use another System One-compatible endpoint, such as a gateway or a self-hosted deployment, set `baseUrl`. Jev-Mail POSTs the same System One payload to `{baseUrl}/systemone`:
+
+```yaml
+model: jev-latest
+provider:
+  type: system-one
+  baseUrl: https://gateway.example.com/v1   # optional; defaults to TypeSafe
+  headers:                                  # optional, NOT secret: uploaded with the config
+    X-Team: mail
+```
+
+- The worker runs in Google's cloud, so `localhost` and private-network URLs are unreachable. Expose a self-hosted endpoint over HTTPS first.
+- The key is stored in the `TYPESAFE_API_KEY` Script Property for any System One endpoint, so existing installs keep working. When moving to a different endpoint, run `config apply`, then `init --replace-key`.
+- Supply the key through the masked `init` prompt or `JEV_MAIL_API_KEY`. The `TYPESAFE_API_KEY` environment variable is read only when the endpoint is TypeSafe's own, so it is never sent to a third-party host.
+
+To try an endpoint against the synthetic fixtures before installing it, run `JEV_MAIL_CONFIG=./jev-mail.yaml JEV_MAIL_API_KEY=... npm run simulate`.
+
 To use a custom file throughout the lifecycle:
 
 ```bash
@@ -232,8 +251,8 @@ The default label-only mode is recommended for first use. Enable archive mode on
 ## Privacy and credentials
 
 - The CLI stores OAuth client metadata, refresh tokens, installation state, and YAML configuration under the local CLI home. Files are written with restrictive permissions. The OAuth client JSON and token files must still be protected by the operating system account.
-- The TypeSafe key is stored in GAS Script Properties and is never committed. Use the masked `init` prompt or `TYPESAFE_API_KEY`; never pass it as a CLI option.
-- The worker sends the sender, recipient, subject, a body snippet capped at 1,000 characters, and limited previous context to the TypeSafe API over HTTPS for classification. Check TypeSafe's current terms and retention policy before using the tool with sensitive mail.
+- The model API key is stored in GAS Script Properties and is never committed. Use the masked `init` prompt, `JEV_MAIL_API_KEY`, or `TYPESAFE_API_KEY` (TypeSafe only); never pass it as a CLI option.
+- The worker sends the sender, recipient, subject, a body snippet capped at 1,000 characters, and limited previous context to the configured model provider (TypeSafe by default) for classification. Check that provider's current terms and retention policy, before using the tool with sensitive mail.
 - Jev-Mail does not use an external database. GAS Script Properties retain bounded processing receipts, policy fingerprints, retry state, and last-run metadata. Temporary pending and failure receipts are age-evicted after about 180 days. Completed receipts for retained inbox threads are kept so older mail is not silently classified again under a changed policy; receipts for archived threads are pruned as capacity approaches roughly 1,200 entries. At capacity, new receipt creation fails closed and `status` reports the condition. Receipts do not contain message bodies.
 - Error logs contain operational errors only. Do not assume this makes the integration suitable for every regulatory or organizational context.
 
@@ -253,7 +272,7 @@ For an optional live check against synthetic fixtures only:
 npm run simulate
 ```
 
-This requires `TYPESAFE_API_KEY` in the environment or a gitignored `.env` file. It calls TypeSafe, never Gmail, and reports fixture behavior rather than production accuracy.
+This requires `TYPESAFE_API_KEY` (or `JEV_MAIL_API_KEY`) in the environment or a gitignored `.env` file. Set `JEV_MAIL_CONFIG` to a YAML file to evaluate its `model` and `provider` instead of the defaults. It calls the model, never Gmail, and reports fixture behavior rather than production accuracy.
 
 The test suite includes pure core/config tests, a GAS worker harness, Google API and OAuth tests, and CLI/E2E checks. Tests use fixtures and mocks; they do not prove that a live Gmail account, Google Cloud project, or TypeSafe account is configured correctly.
 

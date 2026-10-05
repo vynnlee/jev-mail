@@ -13,7 +13,7 @@ export async function confirm(question: string, defaultYes = false): Promise<boo
   return /^y/i.test(answer);
 }
 export async function secret(question: string): Promise<string> {
-  if (!process.stdin.isTTY || !process.stdin.setRawMode) throw new Error('Set TYPESAFE_API_KEY in the environment or enter it in an interactive terminal.');
+  if (!process.stdin.isTTY || !process.stdin.setRawMode) throw new Error('Set JEV_MAIL_API_KEY in the environment or enter it in an interactive terminal.');
   process.stderr.write(`${question}: `);
   const wasRaw = process.stdin.isRaw;
   process.stdin.setRawMode(true); process.stdin.resume();

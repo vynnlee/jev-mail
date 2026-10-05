@@ -13,9 +13,24 @@ export interface CategoryConfig {
   archive: boolean;
 }
 
+export type ProviderType = 'system-one';
+
+/**
+ * Model backend. Absent means System One at TypeSafe. `system-one` with a
+ * `baseUrl` targets any System One-compatible endpoint (gateway, self-hosted).
+ * Everything here is uploaded to GAS as plain configuration, so it must not
+ * contain secrets; the API key is stored separately in Script Properties.
+ */
+export interface ProviderConfig {
+  type: ProviderType;
+  baseUrl?: string;
+  headers?: Record<string, string>;
+}
+
 export interface JevMailConfig {
   version: 1;
   model: string;
+  provider?: ProviderConfig;
   labels: {
     action: string;
     review: string;
@@ -168,7 +183,41 @@ function assertPositiveInteger(value: unknown, path: string, max: number): asser
 
 function assertConfigShape(value: unknown): asserts value is RecordLike {
   if (!isRecord(value)) throw new Error('config: expected an object');
-  assertExactKeys(value, ['version', 'model', 'labels', 'thresholds', 'categories', 'runtime'], 'config');
+  assertExactKeys(value, ['version', 'model', 'provider', 'labels', 'thresholds', 'categories', 'runtime'], 'config');
+}
+
+const FORBIDDEN_HEADERS = new Set(['authorization', 'content-type', 'content-length', 'host', 'cookie']);
+
+function validateProvider(value: unknown): ProviderConfig | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error('config.provider: expected an object');
+  assertExactKeys(value, ['type', 'baseUrl', 'headers'], 'config.provider');
+  if (value.type !== 'system-one') throw new Error('config.provider.type: expected "system-one"');
+  const provider: ProviderConfig = { type: value.type };
+  if (value.baseUrl !== undefined) {
+    assertSafeString(value.baseUrl, 'config.provider.baseUrl');
+    let url: URL;
+    try { url = new URL(value.baseUrl); } catch { throw new Error('config.provider.baseUrl: expected an absolute URL'); }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      throw new Error('config.provider.baseUrl: expected an http(s) URL');
+    }
+    if (url.username || url.password || url.search || url.hash) {
+      throw new Error('config.provider.baseUrl: must not contain credentials, query, or fragment');
+    }
+    provider.baseUrl = value.baseUrl.replace(/\/+$/u, '');
+  }
+  if (value.headers !== undefined) {
+    if (!isRecord(value.headers)) throw new Error('config.provider.headers: expected an object');
+    const headers: Record<string, string> = {};
+    for (const [name, header] of Object.entries(value.headers)) {
+      if (!/^[A-Za-z0-9-]{1,100}$/u.test(name)) throw new Error(`config.provider.headers: invalid header name "${name}"`);
+      if (FORBIDDEN_HEADERS.has(name.toLowerCase())) throw new Error(`config.provider.headers.${name}: header is managed by Jev-Mail`);
+      assertSafeString(header, `config.provider.headers.${name}`);
+      headers[name] = header;
+    }
+    provider.headers = headers;
+  }
+  return provider;
 }
 
 function validateConfigInternal(value: unknown): JevMailConfig {
@@ -176,6 +225,7 @@ function validateConfigInternal(value: unknown): JevMailConfig {
 
   if (value.version !== 1) throw new Error('config.version: expected 1');
   assertSafeString(value.model, 'config.model');
+  const provider = validateProvider(value.provider);
 
   if (!isRecord(value.labels)) throw new Error('config.labels: expected an object');
   assertExactKeys(value.labels, ['action', 'review'], 'config.labels');
@@ -265,6 +315,7 @@ function validateConfigInternal(value: unknown): JevMailConfig {
   return {
     version: 1,
     model: value.model,
+    ...(provider ? { provider } : {}),
     labels: { action: value.labels.action, review: value.labels.review },
     thresholds: {
       actionRequired,

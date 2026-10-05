@@ -1,6 +1,15 @@
 version: 1
 model: jev-latest
 
+# Optional. System One at TypeSafe is the default. To use another System
+# One-compatible endpoint (headers are not secret; enter the API key via
+# `init` or JEV_MAIL_API_KEY):
+# provider:
+#   type: system-one
+#   baseUrl: https://gateway.example.com/v1
+#   headers:
+#     X-Team: mail
+
 labels:
   action: Follow Up
   review: Review
@@ -38,7 +47,7 @@ categories:
     description: Automated service notices, verification codes, password resets, security alerts, and repository activity
     examples:
       - Your verification code is 582914
-      - Security alert: New login detected
+      - 'Security alert: New login detected'
       - '[GitHub] Pull request #123 merged'
     archive: true
 

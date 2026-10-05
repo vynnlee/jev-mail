@@ -352,3 +352,30 @@ test('full durable receipt store fails closed before another model call', () => 
   assert.equal(threads[0].labels.size, 0);
   assert.equal(worker.status().receiptCapacityReached, true);
 });
+
+test('system-one provider sends requests to a configured gateway', () => {
+  config.provider = { type: 'system-one', baseUrl: 'https://gateway.example.com/v1', headers: { 'X-Team': 'mail' } };
+  const requests: any[] = [];
+  (globalThis as any).UrlFetchApp = { fetch: (url: string, options: any) => {
+    calls++;
+    requests.push({ url, options });
+    return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ answers }) };
+  } };
+  try {
+    configure('gateway-key');
+    assert.equal(properties.get('TYPESAFE_API_KEY'), 'gateway-key');
+    assert.equal(worker.status().provider, 'system-one');
+    const thread = new Thread('t1', [new Message('m1', 'Receipt')]);
+    threads.push(thread);
+    worker.installTrigger();
+    enable();
+    json(worker.autoTriageInbox());
+    const last = requests[requests.length - 1];
+    assert.equal(last.url, 'https://gateway.example.com/v1/systemone');
+    assert.equal(last.options.headers.Authorization, 'Bearer gateway-key');
+    assert.equal(last.options.headers['X-Team'], 'mail');
+    assert.equal(last.options.contentType, 'application/json');
+    assert.equal(JSON.parse(last.options.payload).model, 'jev-latest');
+    assert.equal(thread.archived, true);
+  } finally { delete config.provider; }
+});

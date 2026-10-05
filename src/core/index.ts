@@ -200,3 +200,4 @@ export function decide(answers: JevAnswers, config: JevMailConfig): Decision {
 }
 
 export type { JevMailConfig } from '../configuration/index.js';
+export * from './provider.js';
